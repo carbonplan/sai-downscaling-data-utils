@@ -28,9 +28,6 @@ Launch JupyterLab and open the notebook to start working with the data.
 
 ## data
 
-> [!CAUTION]
-> **Preliminary Data**: The data used throughout this repository is a preliminary release. We welcome feedback on both the dataset and its access utilities to help guide continued development.
-
 > [!IMPORTANT]
 > Data associated with this repository are subject to additional [terms of data access](https://carbonplan.github.io/srm-downscaling/terms-of-data-access.html).
 
@@ -87,7 +84,8 @@ Then open `notebooks/subsetting-and-exporting.ipynb`. The notebook walks through
 
 - Loading the dataset from cloud storage
 - Selecting a region of interest using a vector boundary (Natural Earth or your own file)
-- Subsetting by scenario, GCM, and variable
+- Subsetting by scenario, GCM, variable and ensemble member
+- Reading and applying the published quality flags
 - Exporting to a local file
 
 To execute the notebook non-interactively (e.g. for testing):
@@ -100,7 +98,7 @@ pixi run jupyter nbconvert --to notebook --execute --inplace notebooks/subsettin
 
 If you want a file rather than an interactive session, `scripts/download.sh` is a
 command-line counterpart to the notebook. It takes the same choices — scenario,
-variable, region, date range — as arguments.
+variable, ensemble member, region, date range — as arguments.
 
 Check what a request costs before downloading anything:
 
@@ -124,6 +122,26 @@ Download a region as Zarr:
     --format zarr --output india_pr.zarr
 ```
 
+See what a scenario publishes before choosing:
+
+```bash
+./scripts/download.sh --scenario ssp245 --list-members
+```
+
+```
+member       coverage                  variables
+001          2015-01-01 to 2099-12-31  pr rsds tas
+...
+006          2015-01-01 to 2068-12-31  pr rsds tas tasmax tasmin
+```
+
+Then pick one with `--member`:
+
+```bash
+./scripts/download.sh --scenario ssp245 --variable tas --member 008 \
+    --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
+```
+
 See `./scripts/download.sh --help` for the full list of options.
 
 Output files are named after the data they contain, so repeated downloads never
@@ -137,19 +155,24 @@ Pass `--output` to choose a name yourself.
 
 Choose the model and downscaling method with `--gcm` (`CESM2-WACCM6` or
 `UKESM1-1-LL`) and `--method` (`bcsd` or `qdmsd`); both default to
-`CESM2-WACCM6` / `bcsd`.
+`CESM2-WACCM6` / `bcsd`. Omitting `--member` takes a pinned default per
+scenario, which reproduces what releases before `v1.0.0` published.
+
+Pass `--qa-flags` to write the published quality flags alongside the variable.
+They share the data's chunk grid, so this roughly doubles the bytes read.
 
 Two things it does for you:
 
-- **Validates dates against the scenario.** Coverage differs — `g6_1p5k` begins in
-  2035, `g6_1p5k_end` covers 2085–2100 and is published for `CESM2-WACCM6` only,
-  and on `CESM2-WACCM6` the `tasmax`/`tasmin` variables stop in 2069 under
-  `ssp245`. Asking outside those ranges would otherwise write an empty file
-  without complaint.
-- **Warns before a large download.** The data is stored in chunks spanning 8,000
-  days, so a request touching a wide area reads far more than it returns. Anything
-  over 5 GB prompts for confirmation; pass `--yes` to skip the prompt, or
-  `--dry-run` to see the estimate and stop.
+- **Validates dates against the member you asked for.** Coverage differs —
+  `g6_1p5k` begins in 2035, `g6_1p5k_end` covers 2085–2100 and is published for
+  `CESM2-WACCM6` only, and coverage varies *within* a scenario: on
+  `CESM2-WACCM6`/`ssp245`, members `001`–`005` run to 2099 while `006`–`010`
+  stop in 2069. The range is read from the member's own time axis, so asking
+  outside it fails loudly instead of writing an empty file.
+- **Warns before a large download.** Chunks span about a year of time over a
+  9°×18° tile, so a request touching a wide area reads far more than it returns.
+  Anything over 5 GB prompts for confirmation; pass `--yes` to skip the prompt,
+  or `--dry-run` to see the estimate and stop.
 
 ## license
 
