@@ -6,21 +6,24 @@ layout, and which ensemble member a bare request resolves to. Keeping them in
 one place matters -- the notebook in this repository once sat broken for a
 whole release because a dead store path was hard-coded in a second location.
 
-Group layout as of v1.0.0::
+Each store publishes two products, as zarr groups::
 
-    {method}/{scenario}/{variable}/{member}
+    {method}/{scenario}/{variable}/{member}                   # downscaled, 0.25 degree
+    {method}/debiased_coarse/{scenario}/{variable}/{member}   # bias-corrected, native GCM grid
 
-**Nothing about that tree is transcribed here.** The published store is the
-authority. Opening a branch pulls one immutable manifest, after which walking
-the whole hierarchy costs milliseconds, so ``layout()`` reads the tree rather
-than keeping a hand-maintained table that goes stale every release. v1.0.0
-turned the dataset into a real ensemble -- up to ten members for one
-CESM2-WACCM6 scenario -- which a literal table could no longer carry.
+``downscaled`` is the finished product and the default everywhere below.
+``debiased_coarse`` is the same GCM data after quantile-mapping bias
+correction but *before* spatial disaggregation, left on the model's own grid
+(about 1-2 degrees). It separates what bias correction did from what
+downscaling did, and it is method-specific: bcsd and qdmsd correct biases
+differently. It also carries ``dtr``, the diurnal temperature range, which the
+pipeline bias-corrects only in order to reconstruct tasmin.
 
-v1.0.0 also publishes ``{method}/debiased_coarse/{scenario}/{variable}/{member}``:
-the debiased GCM fields at their native resolution, before downscaling. Those
-are pipeline diagnostics rather than the 0.25 degree product, so they are
-excluded from everything below.
+**Nothing about either tree is transcribed here.** The published store is the
+authority. Opening a branch resolves it to one snapshot whose manifest lists
+every group, so walking the whole hierarchy costs milliseconds, and
+``layout()`` reads the tree rather than keeping a hand-maintained table that
+goes stale every release.
 """
 
 from __future__ import annotations
@@ -36,9 +39,10 @@ __all__ = [
     "REGION",
     "STORE_BRANCH",
     "GCMS",
+    "PRODUCTS",
     "METHODS",
     "VARIABLES",
-    "QA_PREFIX",
+    "COARSE_ONLY_VARIABLES",
     "layout",
     "scenarios_for",
     "variables_for",
@@ -68,20 +72,21 @@ _STORES = {
 }
 GCMS = list(_STORES)
 
+# The products each store publishes, and the group segment that selects one.
+PRODUCTS = ["downscaled", "debiased_coarse"]
+_PRODUCT_SEGMENT = {"downscaled": None, "debiased_coarse": "debiased_coarse"}
+
 # The advertised sets, kept as literals so `--help` and error messages do not
 # have to touch the network. What a *given* combination actually publishes
 # comes from the store: see variables_for() and members_for().
 METHODS = ["bcsd", "qdmsd"]
 VARIABLES = ["tas", "tasmax", "tasmin", "pr", "rsds"]
 
-# Sits alongside the scenarios under each method, holding the debiased GCM
-# fields at native resolution. Not the downscaled product; skipped everywhere.
-_DIAGNOSTIC_GROUP = "debiased_coarse"
-
-# v1.0.0 ships quality flags as ordinary data variables in some groups. They
-# share the data variable's chunk grid, so carrying them along doubles the
-# bytes read -- hence load_downscaling_store(qa_flags=False) by default.
-QA_PREFIX = "qa_flag"
+# Published under debiased_coarse only; the name mirrors upstream's own
+# COARSE_ONLY_VARIABLES. A disaggregated dtr would stop equalling
+# tasmax - tasmin once the fine pair is reconciled, so upstream never writes it
+# at 0.25 degrees. Use tasmax - tasmin there instead.
+COARSE_ONLY_VARIABLES = ["dtr"]
 
 # Which member a bare (scenario, variable) request resolves to. This is the one
 # piece of editorial judgement in the module -- the store publishes several
@@ -91,11 +96,13 @@ QA_PREFIX = "qa_flag"
 #
 # These reproduce the single members published before v1.0.0, whose data is
 # byte-identical there, so pinning the new branch changes no existing result.
+# dtr rides with tasmax/tasmin, which come from the same batch of members.
+# Both products publish the same members, so one table serves both.
 # "*" is the fallback for any variable without its own entry.
 _DEFAULT_MEMBERS = {
     "CESM2-WACCM6": {
-        "historical": {"*": "r3i1p1f1", "tasmax": "001", "tasmin": "001"},
-        "ssp245": {"*": "003", "tasmax": "008", "tasmin": "008"},
+        "historical": {"*": "r3i1p1f1", "tasmax": "001", "tasmin": "001", "dtr": "001"},
+        "ssp245": {"*": "003", "tasmax": "008", "tasmin": "008", "dtr": "008"},
         "g6_1p5k": {"*": "003"},
         "g6_1p5k_end": {"*": "002"},
     },
@@ -129,30 +136,26 @@ def _open_root(gcm: str, branch: str):
 
 
 @functools.cache
-def _layout(gcm: str, branch: str) -> dict:
+def _layout(gcm: str, branch: str, product: str) -> dict:
     _, root = _open_root(gcm, branch)
+    segment = _PRODUCT_SEGMENT[product]
+    product_segments = {s for s in _PRODUCT_SEGMENT.values() if s}
     tree = {}
     for method in sorted(root.group_keys()):
-        scenarios = {}
-        for scenario in sorted(root[method].group_keys()):
-            if scenario == _DIAGNOSTIC_GROUP:
+        base = root[method]
+        if segment is not None:
+            if segment not in list(base.group_keys()):
                 continue
-            scenarios[scenario] = {
-                variable: sorted(root[f"{method}/{scenario}/{variable}"].group_keys())
-                for variable in sorted(root[f"{method}/{scenario}"].group_keys())
+            base = base[segment]
+        tree[method] = {
+            scenario: {
+                variable: sorted(base[f"{scenario}/{variable}"].group_keys())
+                for variable in sorted(base[scenario].group_keys())
             }
-        tree[method] = scenarios
+            for scenario in sorted(base.group_keys())
+            if scenario not in product_segments
+        }
     return tree
-
-
-def layout(gcm: str = "CESM2-WACCM6", branch: str | None = None) -> dict:
-    """Report what the store actually publishes, as {method: {scenario: {variable: [members]}}}.
-
-    Read from the store rather than transcribed, so it cannot go stale. The
-    walk is milliseconds once the branch is open, and the result is cached.
-    """
-    _check_gcm(gcm)
-    return copy.deepcopy(_layout(gcm, branch or STORE_BRANCH))
 
 
 def _check_gcm(gcm: str) -> None:
@@ -160,65 +163,107 @@ def _check_gcm(gcm: str) -> None:
         raise ValueError(f"gcm must be one of {GCMS}, got {gcm!r}")
 
 
-def _methods(gcm: str, branch: str | None = None) -> dict:
+def _check_product(product: str) -> None:
+    if product not in _PRODUCT_SEGMENT:
+        raise ValueError(f"product must be one of {PRODUCTS}, got {product!r}")
+
+
+def _where(gcm: str, method: str, product: str, *rest: str) -> str:
+    """A readable address for error messages, naming the product only when not default."""
+    segment = _PRODUCT_SEGMENT[product]
+    return "/".join(p for p in (gcm, method, segment, *rest) if p)
+
+
+def _group_path(method: str, scenario: str, variable: str, member: str, product: str) -> str:
+    segment = _PRODUCT_SEGMENT[product]
+    return "/".join(p for p in (method, segment, scenario, variable, member) if p)
+
+
+def layout(
+    gcm: str = "CESM2-WACCM6", branch: str | None = None, *, product: str = "downscaled"
+) -> dict:
+    """Report what the store publishes, as {method: {scenario: {variable: [members]}}}.
+
+    Read from the store rather than transcribed, so it cannot go stale. The
+    walk is milliseconds once the branch is open, and the result is cached.
+    """
     _check_gcm(gcm)
-    return _layout(gcm, branch or STORE_BRANCH)
+    _check_product(product)
+    return copy.deepcopy(_layout(gcm, branch or STORE_BRANCH, product))
 
 
-def _scenarios(gcm: str, method: str, branch: str | None = None) -> dict:
-    tree = _methods(gcm, branch)
+def _scenarios(gcm: str, method: str, product: str) -> dict:
+    _check_gcm(gcm)
+    _check_product(product)
+    tree = _layout(gcm, STORE_BRANCH, product)
     if method not in tree:
-        raise ValueError(f"method must be one of {sorted(tree)} for {gcm}, got {method!r}")
+        raise ValueError(
+            f"method must be one of {sorted(tree)} for {_where(gcm, '', product)}, got {method!r}"
+        )
     return tree[method]
 
 
-def _variables(scenario: str, gcm: str, method: str, branch: str | None = None) -> dict:
-    scenarios = _scenarios(gcm, method, branch)
+def _variables(scenario: str, gcm: str, method: str, product: str) -> dict:
+    scenarios = _scenarios(gcm, method, product)
     if scenario not in scenarios:
         raise ValueError(
-            f"scenario must be one of {sorted(scenarios)} for {gcm}/{method}, got {scenario!r}"
+            f"scenario must be one of {sorted(scenarios)} for {_where(gcm, method, product)}, "
+            f"got {scenario!r}"
         )
     return scenarios[scenario]
 
 
-def scenarios_for(gcm: str = "CESM2-WACCM6", method: str = "bcsd") -> list[str]:
+def scenarios_for(
+    gcm: str = "CESM2-WACCM6", method: str = "bcsd", *, product: str = "downscaled"
+) -> list[str]:
     """Scenarios published for a given GCM (g6_1p5k_end is CESM2-WACCM6 only)."""
-    return sorted(_scenarios(gcm, method))
+    return sorted(_scenarios(gcm, method, product))
 
 
-def variables_for(scenario: str, gcm: str = "CESM2-WACCM6", method: str = "bcsd") -> list[str]:
+def variables_for(
+    scenario: str, gcm: str = "CESM2-WACCM6", method: str = "bcsd", *, product: str = "downscaled"
+) -> list[str]:
     """Variables published for a scenario. Not every member carries every variable."""
-    return sorted(_variables(scenario, gcm, method))
+    return sorted(_variables(scenario, gcm, method, product))
 
 
 def members_for(
-    scenario: str, variable: str = "tas", gcm: str = "CESM2-WACCM6", method: str = "bcsd"
+    scenario: str,
+    variable: str = "tas",
+    gcm: str = "CESM2-WACCM6",
+    method: str = "bcsd",
+    *,
+    product: str = "downscaled",
 ) -> list[str]:
     """Ensemble members published for a (scenario, variable) pair.
 
     v1.0.0 publishes several members for most scenarios, and they do not all
     carry the same variables: on CESM2-WACCM6/ssp245, members 001-005 run to
     2099 with tas/pr/rsds only, while 006-010 stop in 2069 and are the only
-    ones with tasmax/tasmin.
+    ones with tasmax/tasmin. Both products publish the same members.
     """
-    variables = _variables(scenario, gcm, method)
+    variables = _variables(scenario, gcm, method, product)
     if variable not in variables:
+        hint = ""
+        if variable in COARSE_ONLY_VARIABLES and product != "debiased_coarse":
+            hint = f"; {variable} is published only with product='debiased_coarse'"
         raise ValueError(
-            f"{gcm}/{method}/{scenario} publishes {sorted(variables)}, not {variable!r}"
+            f"{_where(gcm, method, product, scenario)} publishes {sorted(variables)}, "
+            f"not {variable!r}{hint}"
         )
     return list(variables[variable])
 
 
 def _resolve_member(
-    scenario: str, variable: str, gcm: str, method: str, member: str | None
+    scenario: str, variable: str, gcm: str, method: str, member: str | None, product: str
 ) -> str:
-    published = members_for(scenario, variable, gcm, method)
+    published = members_for(scenario, variable, gcm, method, product=product)
+    where = _where(gcm, method, product, scenario, variable)
 
     if member is not None:
         if member not in published:
             raise ValueError(
-                f"member {member!r} is not published for {gcm}/{method}/{scenario}/{variable}; "
-                f"available: {published}"
+                f"member {member!r} is not published for {where}; available: {published}"
             )
         return member
 
@@ -226,14 +271,12 @@ def _resolve_member(
     default = pins.get(variable, pins.get("*"))
     if default is None:
         raise ValueError(
-            f"no default member pinned for {gcm}/{scenario}/{variable}; "
-            f"pass member= explicitly, one of {published}"
+            f"no default member pinned for {where}; pass member= explicitly, one of {published}"
         )
     if default not in published:
         raise ValueError(
-            f"the pinned default member {default!r} is no longer published for "
-            f"{gcm}/{method}/{scenario}/{variable} on branch {STORE_BRANCH}; "
-            f"pass member= explicitly, one of {published}"
+            f"the pinned default member {default!r} is no longer published for {where} on "
+            f"branch {STORE_BRANCH}; pass member= explicitly, one of {published}"
         )
     return default
 
@@ -244,20 +287,21 @@ def ensemble_member(
     gcm: str = "CESM2-WACCM6",
     method: str = "bcsd",
     member: str | None = None,
+    *,
+    product: str = "downscaled",
 ) -> str:
     """Report which member a (gcm, scenario, variable) request resolves to.
 
     Passing `member` validates it against the store and hands it back, so this
     is also the one place callers need to build a filename or a group path.
     """
-    return _resolve_member(scenario, variable, gcm, method, member)
+    return _resolve_member(scenario, variable, gcm, method, member, product)
 
 
 @functools.cache
-def _coverage(gcm: str, method: str, scenario: str, variable: str, member: str, branch: str):
+def _coverage(gcm: str, group_path: str, branch: str):
     _, root = _open_root(gcm, branch)
-    group = root[f"{method}/{scenario}/{variable}/{member}"]
-    time = group["time"]
+    time = root[group_path]["time"]
     stamps = xr.coding.times.decode_cf_datetime(
         np.asarray([time[0], time[-1]]),
         time.attrs["units"],
@@ -272,18 +316,26 @@ def coverage(
     gcm: str = "CESM2-WACCM6",
     method: str = "bcsd",
     member: str | None = None,
+    *,
+    product: str = "downscaled",
 ) -> tuple[str, str]:
     """Return the (first, last) date available, read from the store's time axis.
 
     Coverage varies by member, not by variable: on CESM2-WACCM6/ssp245, member
     003 runs to 2099 and member 008 stops in 2069.
     """
-    resolved = _resolve_member(scenario, variable, gcm, method, member)
-    return _coverage(gcm, method, scenario, variable, resolved, STORE_BRANCH)
+    resolved = _resolve_member(scenario, variable, gcm, method, member, product)
+    path = _group_path(method, scenario, variable, resolved, product)
+    return _coverage(gcm, path, STORE_BRANCH)
 
 
 def check_members(
-    scenario: str, variables, gcm: str = "CESM2-WACCM6", method: str = "bcsd"
+    scenario: str,
+    variables,
+    gcm: str = "CESM2-WACCM6",
+    method: str = "bcsd",
+    *,
+    product: str = "downscaled",
 ) -> dict:
     """Map each variable to its default member, warning when they disagree.
 
@@ -292,18 +344,21 @@ def check_members(
     and combining them mixes realizations. Since v1.0.0 that is usually
     avoidable: several members carry every variable, and this reports them.
     """
-    members = {v: ensemble_member(scenario, v, gcm, method) for v in variables}
+    members = {v: ensemble_member(scenario, v, gcm, method, product=product) for v in variables}
+    where = _where(gcm, "", product, scenario)
     if len(set(members.values())) == 1:
         shared = next(iter(set(members.values())))
-        print(f"{gcm}/{scenario}: {', '.join(members)} all share member {shared}")
+        print(f"{where}: {', '.join(members)} all share member {shared}")
         return members
 
-    print(f"WARNING: on {gcm}/{scenario} these variables span multiple ensemble members:")
+    print(f"WARNING: on {where} these variables span multiple ensemble members:")
     for v, m in members.items():
         print(f"    {v:8s} -> {m}")
     print("  Combining them mixes members, which is rarely intended.")
 
-    common = set.intersection(*(set(members_for(scenario, v, gcm, method)) for v in variables))
+    common = set.intersection(
+        *(set(members_for(scenario, v, gcm, method, product=product)) for v in variables)
+    )
     if common:
         print(f"  Members carrying all of {list(variables)}: {sorted(common)}")
         print(f"  Pass member= to load them from one realization, e.g. member={sorted(common)[0]!r}.")
@@ -312,9 +367,22 @@ def check_members(
     return members
 
 
-def qa_flag_vars(ds: xr.Dataset) -> list[str]:
-    """Names of the quality-flag variables present, which is not every group."""
-    return sorted(v for v in ds.data_vars if str(v).startswith(QA_PREFIX))
+def qa_flag_vars(ds: xr.Dataset, variable: str | None = None) -> list[str]:
+    """Names of the quality-flag variables in a group as loaded.
+
+    A group holds its own variable plus zero or more binary flags, so a flag is
+    every data variable that is not the group's variable. That rule holds for
+    every group in v1.0.0, in both products. Matching on names does not:
+    ``trend_distortion_flag`` has no ``qa_flag`` prefix.
+
+    `variable` defaults to the group's ``srm_downscaling:variable`` attribute.
+    Call this on a freshly loaded group -- anything you add afterwards would
+    be counted as a flag too.
+    """
+    variable = variable or ds.attrs.get("srm_downscaling:variable")
+    if variable is None:
+        raise ValueError("cannot tell the data variable from the flags here; pass variable=")
+    return sorted(str(v) for v in ds.data_vars if v != variable)
 
 
 def load_downscaling_store(
@@ -324,6 +392,8 @@ def load_downscaling_store(
     method: str = "bcsd",
     member: str | None = None,
     qa_flags: bool = False,
+    *,
+    product: str = "downscaled",
 ) -> xr.Dataset:
     """Open one group from the published store, lazily.
 
@@ -332,26 +402,30 @@ def load_downscaling_store(
     exactly the same bytes read.
 
     `qa_flags` defaults to False so the result holds exactly the variable you
-    asked for. The flags share that variable's chunk grid, so keeping them
-    doubles the bytes every later selection reads; opt in when you intend to
-    use them. Not every group publishes them -- see qa_flag_vars().
+    asked for. qa_flag_time_varying shares that variable's chunk grid, so
+    keeping it doubles the bytes every later selection reads; opt in when you
+    intend to use the flags. Which flags a group carries varies -- see
+    qa_flag_vars().
+
+    `product="debiased_coarse"` opens the bias-corrected data on the GCM's
+    native grid instead of the downscaled 0.25 degree product.
     """
     if method not in METHODS:
         raise ValueError(f"method must be one of {METHODS}, got {method!r}")
-    # Also validates gcm, scenario, variable and member against the store.
-    resolved = _resolve_member(scenario, variable, gcm, method, member)
+    # Also validates gcm, product, scenario, variable and member against the store.
+    resolved = _resolve_member(scenario, variable, gcm, method, member, product)
 
     session, _ = _open_root(gcm, STORE_BRANCH)
     ds = xr.open_dataset(
         session.store,
-        group=f"{method}/{scenario}/{variable}/{resolved}",
+        group=_group_path(method, scenario, variable, resolved, product),
         engine="zarr",
         consolidated=False,
         zarr_format=3,
         chunks={},
     )
     if not qa_flags:
-        ds = ds.drop_vars(qa_flag_vars(ds))
+        ds = ds.drop_vars(qa_flag_vars(ds, variable))
     return ds
 
 
@@ -413,6 +487,7 @@ def output_filename(
     gcm: str = "CESM2-WACCM6",
     method: str = "bcsd",
     member: str | None = None,
+    product: str = "downscaled",
     label: str | None = None,
     months=None,
     suffix: str = ".nc",
@@ -429,14 +504,19 @@ def output_filename(
     reverse matters too: one scenario publishes up to ten members, so the
     member has to be in the name for those to land in separate files.
 
+    The bias-corrected product would otherwise collide with the downscaled one
+    for the same selection, so it tags the method field --
+    ``..._bcsd-debiased-coarse_...`` -- while downscaled names stay unchanged.
+
     `label` is a free-text prefix describing the region or purpose; underscores
     in it are converted to hyphens so `_` stays a clean field separator.
     """
-    resolved = ensemble_member(scenario, variable, gcm, method, member)
+    resolved = ensemble_member(scenario, variable, gcm, method, member, product=product)
+    method_tag = method if product == "downscaled" else f"{method}-{product.replace('_', '-')}"
     bits = []
     if label:
         bits.append(str(label).strip().replace(" ", "-").replace("_", "-"))
-    bits += [gcm, method, scenario, resolved, variable]
+    bits += [gcm, method_tag, scenario, resolved, variable]
 
     if start or end:
         span = "-".join(part[:4] for part in (start, end) if part)

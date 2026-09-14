@@ -20,6 +20,11 @@ Download a single-point time series::
 See which ensemble members a scenario publishes, and what each one covers::
 
     python scripts/download.py --scenario ssp245 --list-members
+
+Download the bias-corrected data on the GCM's own grid, before downscaling::
+
+    python scripts/download.py --scenario ssp245 --product debiased_coarse \
+        --variable dtr --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
 """
 
 from __future__ import annotations
@@ -33,8 +38,10 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from srm_access import (  # noqa: E402
+    COARSE_ONLY_VARIABLES,
     GCMS,
     METHODS,
+    PRODUCTS,
     STORE_BRANCH,
     VARIABLES,
     coverage,
@@ -53,8 +60,9 @@ from srm_access import (  # noqa: E402
 # naming what that GCM/method actually publishes.
 ALL_SCENARIOS = ["g6_1p5k", "g6_1p5k_end", "historical", "ssp245"]
 
-# A request reading more than this prompts for confirmation. Chunks span about
-# a year each, so a global request reaches tens of GB very easily.
+# A request reading more than this prompts for confirmation. Downscaled chunks
+# span about a year over a regional tile, so a global request reaches tens of GB
+# very easily.
 PROMPT_ABOVE_GB = 5.0
 
 
@@ -69,7 +77,15 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--gcm", default="CESM2-WACCM6", choices=GCMS)
     p.add_argument("--method", default="bcsd", choices=METHODS,
                    help="downscaling method (default: bcsd)")
-    p.add_argument("--variable", default="tas", choices=VARIABLES)
+    p.add_argument(
+        "--product", default="downscaled", choices=PRODUCTS,
+        help="downscaled (0.25 degree, the default) or debiased_coarse (bias-corrected "
+             "on the GCM's native grid, before downscaling)",
+    )
+    p.add_argument(
+        "--variable", default="tas", choices=VARIABLES + COARSE_ONLY_VARIABLES,
+        help="dtr is published with --product debiased_coarse only",
+    )
     p.add_argument(
         "--member",
         help="ensemble member (default: the pinned member for this scenario/variable); "
@@ -92,12 +108,18 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--format", default="netcdf", choices=["netcdf", "zarr"])
     p.add_argument(
         "--qa-flags", action="store_true",
-        help="also write the quality flag variables. They share the data's chunk grid, "
-             "so this roughly doubles the bytes read",
+        help="also write the quality flag variables. The per-day flag shares the data's "
+             "chunk grid, so this roughly doubles the bytes read",
     )
     p.add_argument("--dry-run", action="store_true", help="report cost, download nothing")
     p.add_argument("--yes", "-y", action="store_true", help="skip the confirmation prompt")
     return p.parse_args(argv)
+
+
+def _address(args, *rest: str) -> str:
+    """Where a request points, naming the product only when it is not the default."""
+    product = None if args.product == "downscaled" else args.product
+    return "/".join(p for p in (args.gcm, args.method, product, args.scenario, *rest) if p)
 
 
 def validate_dates(args, member: str, first: str, last: str) -> None:
@@ -138,8 +160,8 @@ def default_output(args, member: str) -> Path:
     return Path(
         output_filename(
             args.scenario, args.variable, args.start, args.end,
-            gcm=args.gcm, method=args.method, member=member, label=label,
-            suffix=".zarr" if args.format == "zarr" else ".nc",
+            gcm=args.gcm, method=args.method, member=member, product=args.product,
+            label=label, suffix=".zarr" if args.format == "zarr" else ".nc",
         )
     )
 
@@ -152,21 +174,25 @@ def list_members(args) -> int:
     only ones carrying tasmax/tasmin -- so this is the table you need before
     choosing one.
     """
-    variables = variables_for(args.scenario, args.gcm, args.method)
+    variables = variables_for(args.scenario, args.gcm, args.method, product=args.product)
     carried: dict[str, list[str]] = {}
     for variable in variables:
-        for member in members_for(args.scenario, variable, args.gcm, args.method):
+        for member in members_for(args.scenario, variable, args.gcm, args.method, product=args.product):
             carried.setdefault(member, []).append(variable)
 
-    print(f"{args.gcm}/{args.method}/{args.scenario} (branch {STORE_BRANCH})")
+    print(f"{_address(args)} (branch {STORE_BRANCH})")
     print(f"{'member':12s} {'coverage':25s} variables")
     for member in sorted(carried):
         first, last = coverage(
-            args.scenario, carried[member][0], args.gcm, args.method, member=member
+            args.scenario, carried[member][0], args.gcm, args.method,
+            member=member, product=args.product,
         )
         print(f"{member:12s} {first} to {last}  {' '.join(sorted(carried[member]))}")
 
-    defaults = {v: ensemble_member(args.scenario, v, args.gcm, args.method) for v in variables}
+    defaults = {
+        v: ensemble_member(args.scenario, v, args.gcm, args.method, product=args.product)
+        for v in variables
+    }
     print("\ndefault member per variable (used when --member is omitted):")
     for variable, member in sorted(defaults.items()):
         print(f"  {variable:8s} -> {member}")
@@ -180,10 +206,13 @@ def main(argv=None) -> int:
         if args.list_members:
             return list_members(args)
 
-        member = ensemble_member(args.scenario, args.variable, args.gcm, args.method, args.member)
+        member = ensemble_member(
+            args.scenario, args.variable, args.gcm, args.method, args.member,
+            product=args.product,
+        )
         ds = load_downscaling_store(
             args.scenario, args.variable, gcm=args.gcm, method=args.method,
-            member=member, qa_flags=args.qa_flags,
+            member=member, qa_flags=args.qa_flags, product=args.product,
         )
     except ValueError as exc:
         raise SystemExit(f"error: {exc}")
@@ -193,8 +222,7 @@ def main(argv=None) -> int:
     first, last = (str(ds.time.values[i])[:10] for i in (0, -1))
     validate_dates(args, member, first, last)
 
-    print(f"{args.gcm}/{args.method}/{args.scenario}/{args.variable} -> member {member} "
-          f"(branch {STORE_BRANCH})")
+    print(f"{_address(args, args.variable)} -> member {member} (branch {STORE_BRANCH})")
     print(f"coverage: {first} to {last}")
 
     if args.start or args.end:
@@ -210,7 +238,7 @@ def main(argv=None) -> int:
         raise SystemExit("error: selection is empty; check the dates and region")
 
     read_bytes = describe_request(ds[args.variable], "requested subset")
-    flags = qa_flag_vars(ds)
+    flags = qa_flag_vars(ds, args.variable)
     for flag in flags:
         read_bytes += describe_request(ds[flag], flag)
     if flags:
@@ -236,8 +264,8 @@ def main(argv=None) -> int:
     print(f"\nwriting {out} ...")
 
     # Drop encoding inherited from the source store. It still describes the full
-    # 3-D grid -- chunks (365, 36, 72) and shards (1095, 180, 360) -- so writing
-    # a reduced selection with it raises an arity error in zarr.
+    # 3-D chunk and shard grid of the group, so writing a reduced selection with
+    # it raises an arity error in zarr.
     out_ds = ds
     for name in out_ds.variables:
         out_ds[name].encoding = {}

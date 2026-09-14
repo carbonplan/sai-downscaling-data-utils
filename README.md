@@ -86,6 +86,7 @@ Then open `notebooks/subsetting-and-exporting.ipynb`. The notebook walks through
 - Selecting a region of interest using a vector boundary (Natural Earth or your own file)
 - Subsetting by scenario, GCM, variable and ensemble member
 - Reading and applying the published quality flags
+- Using the bias-corrected data on each GCM's native grid, before downscaling
 - Exporting to a local file
 
 To execute the notebook non-interactively (e.g. for testing):
@@ -142,6 +143,19 @@ Then pick one with `--member`:
     --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
 ```
 
+Download the bias-corrected data instead with `--product debiased_coarse`: the same
+GCM output after bias correction but before downscaling, on the model's own grid
+(about 1° for `CESM2-WACCM6`). It also offers `dtr`, the diurnal temperature range
+the pipeline uses to reconstruct `tasmin`:
+
+```bash
+./scripts/download.sh --scenario ssp245 --product debiased_coarse --variable dtr \
+    --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
+```
+
+Bias-corrected filenames tag the method field (`..._bcsd-debiased-coarse_...`), so
+they never overwrite a downscaled download of the same selection.
+
 See `./scripts/download.sh --help` for the full list of options.
 
 Output files are named after the data they contain, so repeated downloads never
@@ -159,7 +173,8 @@ Choose the model and downscaling method with `--gcm` (`CESM2-WACCM6` or
 scenario, which reproduces what releases before `v1.0.0` published.
 
 Pass `--qa-flags` to write the published quality flags alongside the variable.
-They share the data's chunk grid, so this roughly doubles the bytes read.
+The per-day flag shares the data's chunk grid, so this roughly doubles the bytes
+read. Without it, files hold only the variable you asked for.
 
 Two things it does for you:
 
