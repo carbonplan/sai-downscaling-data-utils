@@ -49,6 +49,7 @@ __all__ = [
     "members_for",
     "coverage",
     "ensemble_member",
+    "pinned_member",
     "check_members",
     "qa_flag_vars",
     "load_downscaling_store",
@@ -254,6 +255,18 @@ def members_for(
     return list(variables[variable])
 
 
+def pinned_member(gcm: str, scenario: str, variable: str) -> str | None:
+    """The member a bare (scenario, variable) request defaults to, unvalidated.
+
+    Other stores built from the same runs -- the processed input stores in
+    input_access.py -- reuse these pins and validate them against their own
+    contents, so a default input member is the member the default downscaled
+    data came from.
+    """
+    pins = _DEFAULT_MEMBERS.get(gcm, {}).get(scenario, {})
+    return pins.get(variable, pins.get("*"))
+
+
 def _resolve_member(
     scenario: str, variable: str, gcm: str, method: str, member: str | None, product: str
 ) -> str:
@@ -267,8 +280,7 @@ def _resolve_member(
             )
         return member
 
-    pins = _DEFAULT_MEMBERS.get(gcm, {}).get(scenario, {})
-    default = pins.get(variable, pins.get("*"))
+    default = pinned_member(gcm, scenario, variable)
     if default is None:
         raise ValueError(
             f"no default member pinned for {where}; pass member= explicitly, one of {published}"

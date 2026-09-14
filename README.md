@@ -189,6 +189,31 @@ Two things it does for you:
   Anything over 5 GB prompts for confirmation; pass `--yes` to skip the prompt,
   or `--dry-run` to see the estimate and stop.
 
+## input data
+
+The downscaled dataset is built from each GCM's daily output. The processed copies the
+pipeline started from are available too: CMIP variable names and units, a proleptic
+Gregorian calendar and longitudes from -180 to 180, before any bias correction. They
+also carry `hurs` (near-surface relative humidity), which the downscaled product does not.
+
+[`notebooks/input-data.ipynb`](notebooks/input-data.ipynb) walks through them: what each
+store holds, what a request costs, and what bias correction changed. The command-line
+tool downloads subsets with `--product input`:
+
+```bash
+./scripts/download.sh --scenario ssp245 --product input --list-members
+./scripts/download.sh --scenario ssp245 --product input \
+    --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
+```
+
+The input stores currently live on CarbonPlan's `carbonplan-srm` S3 bucket (anonymous,
+read-only) and will move to Source Cooperative.
+
+Their cost profile differs from the downscaled product's. A chunk holds the whole globe
+for 30 days (`CESM2-WACCM6`) or 60 days (`UKESM1-1-LL`), so a region costs the same as a
+single point, and a long point series is expensive: 6.9 GB for 85 years of one
+`CESM2-WACCM6` member. Maps are cheap.
+
 ## license
 
 All the code in this repository is [MIT](https://choosealicense.com/licenses/mit/) licensed.

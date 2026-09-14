@@ -25,6 +25,11 @@ Download the bias-corrected data on the GCM's own grid, before downscaling::
 
     python scripts/download.py --scenario ssp245 --product debiased_coarse \
         --variable dtr --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
+
+Download the GCM input data the pipeline started from, before bias correction::
+
+    python scripts/download.py --scenario ssp245 --product input \
+        --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
 """
 
 from __future__ import annotations
@@ -37,6 +42,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import input_access as inputs  # noqa: E402
 from srm_access import (  # noqa: E402
     COARSE_ONLY_VARIABLES,
     GCMS,
@@ -60,6 +66,10 @@ from srm_access import (  # noqa: E402
 # naming what that GCM/method actually publishes.
 ALL_SCENARIOS = ["g6_1p5k", "g6_1p5k_end", "historical", "ssp245"]
 
+# The published products, plus the processed GCM input the pipeline started from.
+CLI_PRODUCTS = PRODUCTS + ["input"]
+INPUT_ONLY_VARIABLES = [v for v in inputs.VARIABLES if v not in VARIABLES]
+
 # A request reading more than this prompts for confirmation. Downscaled chunks
 # span about a year over a regional tile, so a global request reaches tens of GB
 # very easily.
@@ -75,16 +85,16 @@ def parse_args(argv=None) -> argparse.Namespace:
     )
     p.add_argument("--scenario", required=True, choices=ALL_SCENARIOS)
     p.add_argument("--gcm", default="CESM2-WACCM6", choices=GCMS)
-    p.add_argument("--method", default="bcsd", choices=METHODS,
-                   help="downscaling method (default: bcsd)")
+    p.add_argument("--method", choices=METHODS,
+                   help="downscaling method (default: bcsd; not used with --product input)")
     p.add_argument(
-        "--product", default="downscaled", choices=PRODUCTS,
-        help="downscaled (0.25 degree, the default) or debiased_coarse (bias-corrected "
-             "on the GCM's native grid, before downscaling)",
+        "--product", default="downscaled", choices=CLI_PRODUCTS,
+        help="downscaled (0.25 degree, the default), debiased_coarse (bias-corrected on the "
+             "GCM's native grid, before downscaling) or input (the GCM data before bias correction)",
     )
     p.add_argument(
-        "--variable", default="tas", choices=VARIABLES + COARSE_ONLY_VARIABLES,
-        help="dtr is published with --product debiased_coarse only",
+        "--variable", default="tas", choices=VARIABLES + COARSE_ONLY_VARIABLES + INPUT_ONLY_VARIABLES,
+        help="dtr is published with --product debiased_coarse only; hurs with --product input only",
     )
     p.add_argument(
         "--member",
@@ -113,11 +123,32 @@ def parse_args(argv=None) -> argparse.Namespace:
     )
     p.add_argument("--dry-run", action="store_true", help="report cost, download nothing")
     p.add_argument("--yes", "-y", action="store_true", help="skip the confirmation prompt")
-    return p.parse_args(argv)
+    args = p.parse_args(argv)
+    _check_product_args(args)
+    return args
+
+
+def _check_product_args(args) -> None:
+    """Reject flag combinations that mean nothing for the chosen product, then fill defaults."""
+    if args.product == "input":
+        if args.method is not None:
+            raise SystemExit(
+                "error: --method does not apply to --product input; the input stores hold the "
+                "GCM data before any downscaling method was applied"
+            )
+        if args.qa_flags:
+            raise SystemExit("error: the input stores carry no quality flags; drop --qa-flags")
+        return
+    if args.variable in INPUT_ONLY_VARIABLES:
+        raise SystemExit(f"error: {args.variable} is published only with --product input")
+    if args.method is None:
+        args.method = "bcsd"
 
 
 def _address(args, *rest: str) -> str:
     """Where a request points, naming the product only when it is not the default."""
+    if args.product == "input":
+        return "/".join((args.gcm, "input", args.scenario, *rest))
     product = None if args.product == "downscaled" else args.product
     return "/".join(p for p in (args.gcm, args.method, product, args.scenario, *rest) if p)
 
@@ -157,13 +188,47 @@ def default_output(args, member: str) -> Path:
         label = "bbox-" + "-".join(f"{v:g}" for v in args.bbox)
     else:
         label = "global"
+    suffix = ".zarr" if args.format == "zarr" else ".nc"
+    if args.product == "input":
+        return Path(
+            inputs.output_filename(
+                args.scenario, args.variable, args.start, args.end,
+                gcm=args.gcm, member=member, label=label, suffix=suffix,
+            )
+        )
     return Path(
         output_filename(
             args.scenario, args.variable, args.start, args.end,
             gcm=args.gcm, method=args.method, member=member, product=args.product,
-            label=label, suffix=".zarr" if args.format == "zarr" else ".nc",
+            label=label, suffix=suffix,
         )
     )
+
+
+def list_input_members(args) -> int:
+    """The input-store counterpart of list_members, from the chunk manifest (no data read)."""
+    variables = inputs.variables_for(args.scenario, args.gcm)
+    carried: dict[str, list[str]] = {}
+    for variable in variables:
+        for member in inputs.members_for(args.scenario, variable, args.gcm):
+            carried.setdefault(member, []).append(variable)
+
+    days = inputs.shard_days(args.scenario, variables[0], args.gcm)
+    print(f"{_address(args)} (branch {inputs.INPUT_BRANCH}; spans accurate to within {days} days, "
+          "and --start/--end are checked exactly)")
+    print(f"{'member':12s} {'coverage':25s} variables")
+    for member in sorted(carried):
+        first, last = inputs.coverage(args.scenario, carried[member][0], args.gcm, member)
+        print(f"{member:12s} {first} to {last}  {' '.join(sorted(carried[member]))}")
+
+    print("\ndefault member per variable (used when --member is omitted):")
+    for variable in variables:
+        try:
+            member = inputs.ensemble_member(args.scenario, variable, args.gcm)
+        except ValueError:
+            member = "(none pinned; pass --member)"
+        print(f"  {variable:8s} -> {member}")
+    return 0
 
 
 def list_members(args) -> int:
@@ -204,25 +269,34 @@ def main(argv=None) -> int:
 
     try:
         if args.list_members:
-            return list_members(args)
+            return list_input_members(args) if args.product == "input" else list_members(args)
 
-        member = ensemble_member(
-            args.scenario, args.variable, args.gcm, args.method, args.member,
-            product=args.product,
-        )
-        ds = load_downscaling_store(
-            args.scenario, args.variable, gcm=args.gcm, method=args.method,
-            member=member, qa_flags=args.qa_flags, product=args.product,
-        )
-    except ValueError as exc:
+        if args.product == "input":
+            member = inputs.ensemble_member(args.scenario, args.variable, args.gcm, args.member)
+            # The input time axis spans the whole scenario with NaN outside a member's
+            # record, so read the real edges: about ten chunk reads.
+            first, last = inputs.coverage(args.scenario, args.variable, args.gcm, member, exact=True)
+            ds = inputs.load_input_store(args.scenario, args.variable, args.gcm, member)
+            branch = inputs.INPUT_BRANCH
+        else:
+            member = ensemble_member(
+                args.scenario, args.variable, args.gcm, args.method, args.member,
+                product=args.product,
+            )
+            ds = load_downscaling_store(
+                args.scenario, args.variable, gcm=args.gcm, method=args.method,
+                member=member, qa_flags=args.qa_flags, product=args.product,
+            )
+            # Read coverage off the axis we just opened rather than a transcribed table,
+            # so it is always the member's own record.
+            first, last = (str(ds.time.values[i])[:10] for i in (0, -1))
+            branch = STORE_BRANCH
+    except (ValueError, RuntimeError) as exc:
         raise SystemExit(f"error: {exc}")
 
-    # Read coverage off the axis we just opened rather than a transcribed table,
-    # so it is always the member's own record.
-    first, last = (str(ds.time.values[i])[:10] for i in (0, -1))
     validate_dates(args, member, first, last)
 
-    print(f"{_address(args, args.variable)} -> member {member} (branch {STORE_BRANCH})")
+    print(f"{_address(args, args.variable)} -> member {member} (branch {branch})")
     print(f"coverage: {first} to {last}")
 
     if args.start or args.end:
@@ -271,7 +345,9 @@ def main(argv=None) -> int:
         out_ds[name].encoding = {}
 
     if args.format == "zarr":
-        out_ds.to_zarr(out, mode="w")
+        # Zarr needs uniform chunks, and a date range rarely starts on a store chunk
+        # boundary, so the selection's first and last dask chunks are ragged.
+        out_ds.chunk("auto").to_zarr(out, mode="w")
     else:
         # NetCDF attrs cannot hold None, which the store uses for an unset
         # provenance field such as ssp245_ensemble_member.
