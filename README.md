@@ -107,24 +107,29 @@ ensemble member, downscaling_method, region, variable, date range — as argumen
 to your local computer. You can download data in either `netCDF` or `Zarr` formats. Below we outline some helpful options
 to pass to the script. Run `./scripts/download.sh --help` to see the full list of available options.
 
+Every download needs you to say exactly which data you want: the model (`--gcm`, `CESM2-WACCM6` or `UKESM1-1-LL`), downscaling method (`--method`, `bcsd` or `qdmsd`), product (`--product`, `downscaled`, `debiased_coarse` or `input`), scenario, variable and ensemble member. If one of them is missing or isn't available, the script stops and lists the options you can choose from.
+
 Check what a request costs before downloading anything by using the flag `--dry-run`:
 
 ```bash
-./scripts/download.sh --scenario ssp245 --start 2050-01-01 --end 2059-12-31 \
-    --bbox 68 6 98 38 --dry-run
+./scripts/download.sh --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
+    --product downscaled --variable tas --member 003 \
+    --start 2050-01-01 --end 2059-12-31 --bbox 68 6 98 38 --dry-run
 ```
 
 Download a single-point time series:
 
 ```bash
-./scripts/download.sh --scenario historical --variable tas \
+./scripts/download.sh --scenario historical --gcm CESM2-WACCM6 --method bcsd \
+    --product downscaled --variable tas --member r3i1p1f1 \
     --point 28.6 77.2 --start 1990-01-01 --end 1999-12-31 --output delhi.nc
 ```
 
 Download a region as `NetCDF`:
 
 ```bash
-./scripts/download.sh --scenario g6_1p5k --variable pr \
+./scripts/download.sh --scenario g6_1p5k --gcm CESM2-WACCM6 --method bcsd \
+    --product downscaled --variable pr --member 003 \
     --bbox 68 6 98 38 --start 2050-01-01 --end 2059-12-31 \
     --output india_pr.nc
 ```
@@ -132,7 +137,8 @@ Download a region as `NetCDF`:
 Download a region as `Zarr`:
 
 ```bash
-./scripts/download.sh --scenario g6_1p5k --variable pr \
+./scripts/download.sh --scenario g6_1p5k --gcm CESM2-WACCM6 --method bcsd \
+    --product downscaled --variable pr --member 003 \
     --bbox 68 6 98 38 --start 2050-01-01 --end 2059-12-31 \
     --format zarr --output india_pr.zarr
 ```
@@ -140,7 +146,8 @@ Download a region as `Zarr`:
 The ensemble members and variables available for each GCM differ. You can see what data are available with the `--list-members` flag:
 
 ```bash
-./scripts/download.sh --scenario ssp245 --list-members
+./scripts/download.sh --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
+    --product downscaled --list-members
 ```
 
 ```
@@ -153,11 +160,10 @@ member       coverage                  variables
 Then pick one with `--member`:
 
 ```bash
-./scripts/download.sh --scenario ssp245 --variable tas --member 008 \
+./scripts/download.sh --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
+    --product downscaled --variable tas --member 008 \
     --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
 ```
-
-Choose the model and downscaling method with `--gcm` (`CESM2-WACCM6` or `UKESM1-1-LL`) and `--downscaling_method` (`bcsd` or `qdmsd`).
 
 Download the bias-corrected data instead of the downscaled data with `--product debiased_coarse`. This coarse data is
 at the GCM's resolution (about 1° for `CESM2-WACCM6`) as opposed to the 0.25° resolution of the downscaled data. The bias-corrected
@@ -165,7 +171,8 @@ data includes the diurnal temperature range (`dtr`) instead of `tasmin` since th
 downscaling step.
 
 ```bash
-./scripts/download.sh --scenario ssp245 --product debiased_coarse --variable dtr \
+./scripts/download.sh --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
+    --product debiased_coarse --variable dtr --member 008 \
     --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
 ```
 
@@ -206,9 +213,9 @@ store holds, what a request costs, and what bias correction changed. The command
 tool downloads subsets with `--product input`:
 
 ```bash
-./scripts/download.sh --scenario ssp245 --product input --list-members
-./scripts/download.sh --scenario ssp245 --product input \
-    --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
+./scripts/download.sh --scenario ssp245 --gcm CESM2-WACCM6 --product input --list-members
+./scripts/download.sh --scenario ssp245 --gcm CESM2-WACCM6 --product input \
+    --variable tas --member 003 --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
 ```
 
 The input stores currently live on CarbonPlan's `carbonplan-srm` S3 bucket (anonymous,

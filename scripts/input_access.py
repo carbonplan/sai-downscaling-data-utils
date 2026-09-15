@@ -25,7 +25,7 @@ import functools
 import numpy as np
 import xarray as xr
 
-from data_access import _month_tag, describe_request, pinned_member
+from data_access import _month_tag, describe_request
 
 __all__ = [
     "INPUT_BUCKET",
@@ -100,7 +100,7 @@ def _root(gcm: str):
     return zarr.open_group(_session(gcm).store, mode="r", zarr_format=3)
 
 
-def scenarios_for(gcm: str = "CESM2-WACCM6") -> list[str]:
+def scenarios_for(gcm: str) -> list[str]:
     """Scenario groups in a GCM's input store."""
     _check_gcm(gcm)
     return sorted(_root(gcm).group_keys())
@@ -121,7 +121,7 @@ def _group(gcm: str, scenario: str) -> xr.Dataset:
     )
 
 
-def variables_for(scenario: str, gcm: str = "CESM2-WACCM6") -> list[str]:
+def variables_for(scenario: str, gcm: str) -> list[str]:
     """Variables a scenario group holds. Not every member carries every one."""
     return sorted(str(v) for v in _group(gcm, scenario).data_vars)
 
@@ -147,7 +147,7 @@ def _stored_shards(gcm: str, scenario: str, variable: str) -> dict[str, tuple[in
     return {members[i]: tuple(sorted(t)) for i, t in sorted(shards.items())}
 
 
-def members_for(scenario: str, variable: str = "tas", gcm: str = "CESM2-WACCM6") -> list[str]:
+def members_for(scenario: str, variable: str, gcm: str) -> list[str]:
     """Members that hold any data for a variable, in the store's member order.
 
     A member whose array is entirely NaN -- ssp245 tasmax for CESM2-WACCM6
@@ -158,7 +158,7 @@ def members_for(scenario: str, variable: str = "tas", gcm: str = "CESM2-WACCM6")
     return [m for m in order if m in stored]
 
 
-def layout(gcm: str = "CESM2-WACCM6") -> dict[str, dict[str, list[str]]]:
+def layout(gcm: str) -> dict[str, dict[str, list[str]]]:
     """What a GCM's input store holds, as {scenario: {variable: [members]}}."""
     return {
         scenario: {v: members_for(scenario, v, gcm) for v in variables_for(scenario, gcm)}
@@ -176,37 +176,39 @@ def _array(gcm: str, scenario: str, variable: str):
     return zarr.open_array(_session(gcm).store, path=f"{scenario}/{variable}", mode="r", zarr_format=3)
 
 
-def shard_days(scenario: str, variable: str = "tas", gcm: str = "CESM2-WACCM6") -> int:
+def shard_days(scenario: str, variable: str, gcm: str) -> int:
     """Days one stored shard spans: the resolution of coverage(..., exact=False)."""
     arr = _array(gcm, scenario, variable)
     return int((arr.shards or arr.chunks)[1])
 
 
-def ensemble_member(
-    scenario: str, variable: str, gcm: str = "CESM2-WACCM6", member: str | None = None
-) -> str:
-    """Which member a request resolves to, validated against the store.
+def ensemble_member(scenario: str, variable: str, gcm: str, member: str | None) -> str:
+    """Check that `member` holds data for `variable` in this input store, and return it.
 
-    Omitting `member` takes the member pinned for the downscaled output
-    (data_access.pinned_member), so the default input is the run the default
-    downscaled data was built from.
+    When `member` is missing or holds no data, the error lists the members that
+    do and the years each covers (to within one shard, read from the manifest).
     """
     published = members_for(scenario, variable, gcm)
-    where = f"{gcm} input {scenario}/{variable}"
-    if member is not None:
-        if member not in published:
-            raise ValueError(f"member {member!r} holds no data for {where}; available: {published}")
+    if member in published:
         return member
-    default = pinned_member(gcm, scenario, variable)
-    if default not in published:
-        raise ValueError(
-            f"no usable default member for {where}; pass member= explicitly, one of {published}"
-        )
-    return default
+    where = f"{gcm} input {scenario}/{variable}"
+    choices = ", ".join(f"{m} ({' to '.join(_manifest_span(gcm, scenario, variable, m))})" for m in published)
+    problem = "no member given" if member is None else f"member {member!r} holds no data"
+    days = shard_days(scenario, variable, gcm)
+    raise ValueError(f"{problem} for {where}; choose one of: {choices} (dates accurate to within {days} days)")
 
 
 def _day(value) -> str:
     return str(np.datetime_as_string(np.datetime64(value, "D"), unit="D"))
+
+
+def _manifest_span(gcm: str, scenario: str, variable: str, member: str) -> tuple[str, str]:
+    """A member's span from the chunk manifest alone, accurate to one shard. Not validated."""
+    shards = _stored_shards(gcm, scenario, variable)[member]
+    times = _group(gcm, scenario).time.values
+    shard_len = shard_days(scenario, variable, gcm)
+    last = min((shards[-1] + 1) * shard_len, len(times)) - 1
+    return _day(times[shards[0] * shard_len]), _day(times[last])
 
 
 def _edge(arr, member_index: int, shard_index: int, lat_i: int, lon_i: int, which: str) -> int:
@@ -243,13 +245,7 @@ def _edge(arr, member_index: int, shard_index: int, lat_i: int, lon_i: int, whic
     return starts[lo] + int(hits[-1] if which == "last" else hits[0])
 
 
-def coverage(
-    scenario: str,
-    variable: str,
-    gcm: str = "CESM2-WACCM6",
-    member: str | None = None,
-    exact: bool = False,
-) -> tuple[str, str]:
+def coverage(scenario: str, variable: str, gcm: str, member: str, exact: bool = False) -> tuple[str, str]:
     """The (first, last) date a member holds data for a variable.
 
     By default this reads only the chunk manifest, so the span is accurate to
@@ -258,13 +254,11 @@ def coverage(
     over the two boundary shards at one grid point: about ten 6.6 MB chunk reads.
     """
     resolved = ensemble_member(scenario, variable, gcm, member)
+    if not exact:
+        return _manifest_span(gcm, scenario, variable, resolved)
     shards = _stored_shards(gcm, scenario, variable)[resolved]
     times = _group(gcm, scenario).time.values
     arr = _array(gcm, scenario, variable)
-    if not exact:
-        shard_len = shard_days(scenario, variable, gcm)
-        last = min((shards[-1] + 1) * shard_len, len(times)) - 1
-        return _day(times[shards[0] * shard_len]), _day(times[last])
     member_index = [str(m) for m in _group(gcm, scenario).ensemble_member.values].index(resolved)
     lat_i, lon_i = arr.shape[2] // 2, arr.shape[3] // 2
     first = _edge(arr, member_index, shards[0], lat_i, lon_i, "first")
@@ -293,9 +287,7 @@ def _correct_model(ds: xr.Dataset, gcm: str) -> xr.Dataset:
     return ds
 
 
-def load_input_store(
-    scenario: str, variable: str = "tas", gcm: str = "CESM2-WACCM6", member: str | None = None
-) -> xr.Dataset:
+def load_input_store(scenario: str, variable: str, gcm: str, member: str) -> xr.Dataset:
     """Open one member's variable from a GCM's input store, lazily.
 
     Returns dims (time, lat, lon), with the member kept as a scalar
@@ -320,8 +312,8 @@ def output_filename(
     start: str | None = None,
     end: str | None = None,
     *,
-    gcm: str = "CESM2-WACCM6",
-    member: str | None = None,
+    gcm: str,
+    member: str,
     label: str | None = None,
     months=None,
     suffix: str = ".nc",

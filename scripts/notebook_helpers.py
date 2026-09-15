@@ -228,6 +228,7 @@ def check_tasmin_reconstruction(
     *,
     gcm: str,
     method: str,
+    member: str,
     year: str,
     lat: slice,
     lon: slice,
@@ -235,10 +236,10 @@ def check_tasmin_reconstruction(
 ) -> xr.Dataset:
     """Check that ``tasmin == tasmax - dtr`` on the coarse grid, and print the result.
 
-    ``dtr`` comes from the same members as tasmax/tasmin, so its default member
-    is used for all three.
+    `member` must contain ``dtr``, which comes from the same members as
+    tasmax/tasmin (members_for(...) lists them). The same member is used for all three.
     """
-    dtr_member = ensemble_member(scenario, "dtr", gcm, method, product="debiased_coarse")
+    dtr_member = ensemble_member(scenario, "dtr", gcm, method, member, product="debiased_coarse")
     pieces = {
         name: load_downscaling_store(
             scenario, name, gcm=gcm, method=method, member=dtr_member, product="debiased_coarse",

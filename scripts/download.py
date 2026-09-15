@@ -8,28 +8,31 @@ Examples
 --------
 Estimate the cost of a request without downloading anything::
 
-    python scripts/download.py --scenario ssp245 --start 2050-01-01 \
-        --end 2059-12-31 --bbox 68 6 98 38 --dry-run
+    python scripts/download.py --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
+        --product downscaled --variable tas --member 003 \
+        --start 2050-01-01 --end 2059-12-31 --bbox 68 6 98 38 --dry-run
 
 Download a single-point time series::
 
-    python scripts/download.py --scenario historical --variable tas \
-        --point 28.6 77.2 --start 1990-01-01 --end 1999-12-31 \
-        --output delhi.nc
+    python scripts/download.py --scenario historical --gcm CESM2-WACCM6 --method bcsd \
+        --product downscaled --variable tas --member r3i1p1f1 \
+        --point 28.6 77.2 --start 1990-01-01 --end 1999-12-31 --output delhi.nc
 
 See which ensemble members a scenario contains, and what each one covers::
 
-    python scripts/download.py --scenario ssp245 --list-members
+    python scripts/download.py --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
+        --product downscaled --list-members
 
 Download the bias-corrected data on the GCM's own grid, before downscaling::
 
-    python scripts/download.py --scenario ssp245 --product debiased_coarse \
-        --variable dtr --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
+    python scripts/download.py --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
+        --product debiased_coarse --variable dtr --member 008 \
+        --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
 
 Download the GCM input data the pipeline started from, before bias correction::
 
-    python scripts/download.py --scenario ssp245 --product input \
-        --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
+    python scripts/download.py --scenario ssp245 --gcm CESM2-WACCM6 --product input \
+        --variable tas --member 003 --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
 """
 
 from __future__ import annotations
@@ -85,22 +88,23 @@ def parse_args(argv=None) -> argparse.Namespace:
         epilog=__doc__.split("Examples")[-1],
     )
     p.add_argument("--scenario", required=True, choices=ALL_SCENARIOS)
-    p.add_argument("--gcm", default="CESM2-WACCM6", choices=GCMS)
+    p.add_argument("--gcm", choices=GCMS, help="required")
     p.add_argument("--method", choices=METHODS,
-                   help="downscaling method (default: bcsd; not used with --product input)")
+                   help="downscaling method; required, except with --product input")
     p.add_argument(
-        "--product", default="downscaled", choices=CLI_PRODUCTS,
-        help="downscaled (0.25 degree, the default), debiased_coarse (bias-corrected on the "
+        "--product", choices=CLI_PRODUCTS,
+        help="required: downscaled (0.25 degree), debiased_coarse (bias-corrected on the "
              "GCM's native grid, before downscaling) or input (the GCM data before bias correction)",
     )
     p.add_argument(
-        "--variable", default="tas", choices=VARIABLES + COARSE_ONLY_VARIABLES + INPUT_ONLY_VARIABLES,
-        help="dtr is available with --product debiased_coarse only; hurs with --product input only",
+        "--variable", choices=VARIABLES + COARSE_ONLY_VARIABLES + INPUT_ONLY_VARIABLES,
+        help="required to download; dtr is available with --product debiased_coarse only, "
+             "hurs with --product input only",
     )
     p.add_argument(
         "--member",
-        help="ensemble member (default: the pinned member for this scenario/variable); "
-             "run --list-members to see what a scenario contains",
+        help="ensemble member; required to download. Run --list-members to see which members "
+             "a scenario contains and what each covers",
     )
     p.add_argument(
         "--list-members", action="store_true",
@@ -130,7 +134,19 @@ def parse_args(argv=None) -> argparse.Namespace:
 
 
 def _check_product_args(args) -> None:
-    """Reject flag combinations that mean nothing for the chosen product, then fill defaults."""
+    """Require every choice that identifies the data, and reject combinations that do not apply."""
+    missing = []
+    if args.gcm is None:
+        missing.append(f"--gcm (one of: {', '.join(GCMS)})")
+    if args.product is None:
+        missing.append(f"--product (one of: {', '.join(CLI_PRODUCTS)})")
+    if args.product != "input" and args.method is None:
+        missing.append(f"--method (one of: {', '.join(METHODS)}; not used with --product input)")
+    if not args.list_members and args.variable is None:
+        missing.append("--variable (run --list-members to see what the scenario contains)")
+    if missing:
+        raise SystemExit("error: missing " + "; ".join(missing))
+
     if args.product == "input":
         if args.method is not None:
             raise SystemExit(
@@ -142,12 +158,10 @@ def _check_product_args(args) -> None:
         return
     if args.variable in INPUT_ONLY_VARIABLES:
         raise SystemExit(f"error: {args.variable} is available only with --product input")
-    if args.method is None:
-        args.method = "bcsd"
 
 
 def _address(args, *rest: str) -> str:
-    """Where a request points, naming the product only when it is not the default."""
+    """Where a request points, naming the product only when it is not the downscaled data."""
     if args.product == "input":
         return "/".join((args.gcm, "input", args.scenario, *rest))
     product = None if args.product == "downscaled" else args.product
@@ -222,13 +236,6 @@ def list_input_members(args) -> int:
         first, last = inputs.coverage(args.scenario, carried[member][0], args.gcm, member)
         print(f"{member:12s} {first} to {last}  {' '.join(sorted(carried[member]))}")
 
-    print("\ndefault member per variable (used when --member is omitted):")
-    for variable in variables:
-        try:
-            member = inputs.ensemble_member(args.scenario, variable, args.gcm)
-        except ValueError:
-            member = "(none pinned; pass --member)"
-        print(f"  {variable:8s} -> {member}")
     return 0
 
 
@@ -255,13 +262,6 @@ def list_members(args) -> int:
         )
         print(f"{member:12s} {first} to {last}  {' '.join(sorted(carried[member]))}")
 
-    defaults = {
-        v: ensemble_member(args.scenario, v, args.gcm, args.method, product=args.product)
-        for v in variables
-    }
-    print("\ndefault member per variable (used when --member is omitted):")
-    for variable, member in sorted(defaults.items()):
-        print(f"  {variable:8s} -> {member}")
     return 0
 
 
@@ -291,7 +291,10 @@ def main(argv=None) -> int:
             # so it is always the member's own record.
             first, last = (str(ds.time.values[i])[:10] for i in (0, -1))
     except (ValueError, RuntimeError) as exc:
-        raise SystemExit(f"error: {exc}")
+        hint = ""
+        if args.member is None and not args.list_members and str(exc).startswith("no member given"):
+            hint = "\nPass one with --member; --list-members shows what each covers."
+        raise SystemExit(f"error: {exc}{hint}")
 
     validate_dates(args, member, first, last)
 

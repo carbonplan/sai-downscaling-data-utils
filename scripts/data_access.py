@@ -1,14 +1,14 @@
 """Shared access helpers for the CarbonPlan SRM downscaling dataset.
 
 This module is the one place that knows which store to open, the group layout,
-and which ensemble member a bare request resolves to.
+and which ensemble members each scenario contains.
 
 Each store publishes two products, as zarr groups::
 
     {method}/{scenario}/{variable}/{member}                   # downscaled, 0.25 degree
     {method}/debiased_coarse/{scenario}/{variable}/{member}   # bias-corrected, native GCM grid
 
-``downscaled`` is the finished product and the default everywhere below.
+``downscaled`` is the finished product.
 ``debiased_coarse`` is the same GCM data after quantile-mapping bias
 correction but *before* spatial disaggregation, left on the model's own grid
 (about 1-2 degrees). It separates what bias correction did from what
@@ -45,7 +45,6 @@ __all__ = [
     "members_for",
     "coverage",
     "ensemble_member",
-    "pinned_member",
     "check_members",
     "qa_flag_vars",
     "load_downscaling_store",
@@ -83,30 +82,6 @@ VARIABLES = ["tas", "tasmax", "tasmin", "pr", "rsds"]
 # tasmax - tasmin once the fine pair is reconciled, so upstream never writes it
 # at 0.25 degrees. Use tasmax - tasmin there instead.
 COARSE_ONLY_VARIABLES = ["dtr"]
-
-# Which member a bare (scenario, variable) request resolves to. This is the one
-# piece of editorial judgement in the module -- the store publishes several
-# members and cannot say which one a newcomer should get -- so it is written
-# out rather than derived. Each pin is checked against the published tree
-# before it is used, so a pin that does not match the store fails loudly.
-#
-# dtr rides with tasmax/tasmin, which come from the same batch of members.
-# Both products publish the same members, so one table serves both.
-# "*" is the fallback for any variable without its own entry.
-_DEFAULT_MEMBERS = {
-    "CESM2-WACCM6": {
-        "historical": {"*": "r3i1p1f1", "tasmax": "001", "tasmin": "001", "dtr": "001"},
-        "ssp245": {"*": "003", "tasmax": "008", "tasmin": "008", "dtr": "008"},
-        "g6_1p5k": {"*": "003"},
-        "g6_1p5k_end": {"*": "002"},
-    },
-    "UKESM1-1-LL": {
-        "historical": {"*": "u-by791"},
-        "ssp245": {"*": "r2i1p1f2"},
-        "g6_1p5k": {"*": "r2i1p1f2"},
-    },
-}
-
 
 # ---------------------------------------------------------------------------
 # Discovery
@@ -173,8 +148,8 @@ def _group_path(method: str, scenario: str, variable: str, member: str, product:
     return "/".join(p for p in (method, segment, scenario, variable, member) if p)
 
 
-def layout(gcm: str = "CESM2-WACCM6", *, product: str = "downscaled") -> dict:
-    """Report what the store publishes, as {method: {scenario: {variable: [members]}}}.
+def layout(gcm: str, *, product: str) -> dict:
+    """Report what the store contains, as {method: {scenario: {variable: [members]}}}.
 
     Read from the store rather than transcribed. The walk is milliseconds once
     the store is open, and the result is cached.
@@ -205,34 +180,23 @@ def _variables(scenario: str, gcm: str, method: str, product: str) -> dict:
     return scenarios[scenario]
 
 
-def scenarios_for(
-    gcm: str = "CESM2-WACCM6", method: str = "bcsd", *, product: str = "downscaled"
-) -> list[str]:
-    """Scenarios published for a given GCM (g6_1p5k_end is CESM2-WACCM6 only)."""
+def scenarios_for(gcm: str, method: str, *, product: str) -> list[str]:
+    """Scenarios available for a GCM and method (g6_1p5k_end is CESM2-WACCM6 only)."""
     return sorted(_scenarios(gcm, method, product))
 
 
-def variables_for(
-    scenario: str, gcm: str = "CESM2-WACCM6", method: str = "bcsd", *, product: str = "downscaled"
-) -> list[str]:
-    """Variables published for a scenario. Not every member carries every variable."""
+def variables_for(scenario: str, gcm: str, method: str, *, product: str) -> list[str]:
+    """Variables available for a scenario. Not every member has every variable."""
     return sorted(_variables(scenario, gcm, method, product))
 
 
-def members_for(
-    scenario: str,
-    variable: str = "tas",
-    gcm: str = "CESM2-WACCM6",
-    method: str = "bcsd",
-    *,
-    product: str = "downscaled",
-) -> list[str]:
-    """Ensemble members published for a (scenario, variable) pair.
+def members_for(scenario: str, variable: str, gcm: str, method: str, *, product: str) -> list[str]:
+    """Ensemble members that contain a variable in a scenario.
 
-    Most scenarios publish several members, and they do not all carry the
-    same variables: on CESM2-WACCM6/ssp245, members 001-005 run to
-    2099 with tas/pr/rsds only, while 006-010 stop in 2069 and are the only
-    ones with tasmax/tasmin. Both products publish the same members.
+    Most scenarios have several members, and they do not all have the same
+    variables: on CESM2-WACCM6/ssp245, members 001-005 run to 2099 with
+    tas/pr/rsds only, while 006-010 stop in 2069 and are the only ones with
+    tasmax/tasmin. Both products contain the same members.
     """
     variables = _variables(scenario, gcm, method, product)
     if variable not in variables:
@@ -246,57 +210,29 @@ def members_for(
     return list(variables[variable])
 
 
-def pinned_member(gcm: str, scenario: str, variable: str) -> str | None:
-    """The member a bare (scenario, variable) request defaults to, unvalidated.
-
-    Other stores built from the same runs -- the processed input stores in
-    input_access.py -- reuse these pins and validate them against their own
-    contents, so a default input member is the member the default downscaled
-    data came from.
-    """
-    pins = _DEFAULT_MEMBERS.get(gcm, {}).get(scenario, {})
-    return pins.get(variable, pins.get("*"))
-
-
 def _resolve_member(
     scenario: str, variable: str, gcm: str, method: str, member: str | None, product: str
 ) -> str:
     published = members_for(scenario, variable, gcm, method, product=product)
-    where = _where(gcm, method, product, scenario, variable)
-
-    if member is not None:
-        if member not in published:
-            raise ValueError(
-                f"member {member!r} is not available for {where}; available: {published}"
-            )
+    if member in published:
         return member
-
-    default = pinned_member(gcm, scenario, variable)
-    if default is None:
-        raise ValueError(
-            f"no default member pinned for {where}; pass member= explicitly, one of {published}"
-        )
-    if default not in published:
-        raise ValueError(
-            f"the pinned default member {default!r} is not available for {where}; "
-            f"pass member= explicitly, one of {published}"
-        )
-    return default
+    where = _where(gcm, method, product, scenario, variable)
+    choices = ", ".join(
+        f"{m} ({' to '.join(_coverage(gcm, _group_path(method, scenario, variable, m, product)))})"
+        for m in published
+    )
+    problem = "no member given" if member is None else f"member {member!r} is not available"
+    raise ValueError(f"{problem} for {where}; choose one of: {choices}")
 
 
 def ensemble_member(
-    scenario: str,
-    variable: str,
-    gcm: str = "CESM2-WACCM6",
-    method: str = "bcsd",
-    member: str | None = None,
-    *,
-    product: str = "downscaled",
+    scenario: str, variable: str, gcm: str, method: str, member: str | None, *, product: str
 ) -> str:
-    """Report which member a (gcm, scenario, variable) request resolves to.
+    """Check that `member` contains `variable` for this request, and return it.
 
-    Passing `member` validates it against the store and hands it back, so this
-    is also the one place callers need to build a filename or a group path.
+    When `member` is missing or not available, the error lists the members that
+    do contain the variable and the years each covers. Callers use this before
+    building a filename or a group path.
     """
     return _resolve_member(scenario, variable, gcm, method, member, product)
 
@@ -314,13 +250,7 @@ def _coverage(gcm: str, group_path: str):
 
 
 def coverage(
-    scenario: str,
-    variable: str,
-    gcm: str = "CESM2-WACCM6",
-    method: str = "bcsd",
-    member: str | None = None,
-    *,
-    product: str = "downscaled",
+    scenario: str, variable: str, gcm: str, method: str, member: str, *, product: str
 ) -> tuple[str, str]:
     """Return the (first, last) date available, read from the store's time axis.
 
@@ -332,42 +262,24 @@ def coverage(
     return _coverage(gcm, path)
 
 
-def check_members(
-    scenario: str,
-    variables,
-    gcm: str = "CESM2-WACCM6",
-    method: str = "bcsd",
-    *,
-    product: str = "downscaled",
-) -> dict:
-    """Map each variable to its default member, warning when they disagree.
+def check_members(scenario: str, variables, gcm: str, method: str, *, product: str) -> list[str]:
+    """Report which members contain every variable in `variables`, and return them.
 
-    On CESM2-WACCM6 the temperature extremes come from a different batch of
-    members than tas/pr/rsds, so the defaults for tas and tasmax do not match
-    and combining them mixes realizations. That is usually avoidable: several
-    members carry every variable, and this reports them.
+    Not every member has every variable: on CESM2-WACCM6/ssp245, members 001-005
+    have tas/pr/rsds only, while 006-010 have all five. Loading each variable
+    from one of the members listed here keeps them from the same model run.
     """
-    members = {v: ensemble_member(scenario, v, gcm, method, product=product) for v in variables}
-    where = _where(gcm, "", product, scenario)
-    if len(set(members.values())) == 1:
-        shared = next(iter(set(members.values())))
-        print(f"{where}: {', '.join(members)} all share member {shared}")
-        return members
-
-    print(f"WARNING: on {where} these variables span multiple ensemble members:")
-    for v, m in members.items():
-        print(f"    {v:8s} -> {m}")
-    print("  Combining them mixes members, which is rarely intended.")
-
-    common = set.intersection(
-        *(set(members_for(scenario, v, gcm, method, product=product)) for v in variables)
-    )
+    variables = list(variables)
+    per_variable = {v: members_for(scenario, v, gcm, method, product=product) for v in variables}
+    common = sorted(set.intersection(*(set(members) for members in per_variable.values())))
+    where = _where(gcm, method, product, scenario)
     if common:
-        print(f"  Members carrying all of {list(variables)}: {sorted(common)}")
-        print(f"  Pass member= to load them from one realization, e.g. member={sorted(common)[0]!r}.")
+        print(f"{where}: members containing {', '.join(variables)}: {', '.join(common)}")
     else:
-        print(f"  No single member carries all of {list(variables)} in this scenario.")
-    return members
+        print(f"{where}: no single member contains all of {', '.join(variables)}")
+        for v, members in per_variable.items():
+            print(f"    {v:8s} {', '.join(members)}")
+    return common
 
 
 def qa_flag_vars(ds: xr.Dataset, variable: str | None = None) -> list[str]:
@@ -390,13 +302,13 @@ def qa_flag_vars(ds: xr.Dataset, variable: str | None = None) -> list[str]:
 
 def load_downscaling_store(
     scenario: str,
-    variable: str = "tas",
-    gcm: str = "CESM2-WACCM6",
-    method: str = "bcsd",
-    member: str | None = None,
+    variable: str,
+    gcm: str,
+    method: str,
+    member: str,
     qa_flags: bool = False,
     *,
-    product: str = "downscaled",
+    product: str,
 ) -> xr.Dataset:
     """Open one group from the published store, lazily.
 
@@ -410,8 +322,8 @@ def load_downscaling_store(
     intend to use the flags. Which flags a group carries varies -- see
     qa_flag_vars().
 
-    `product="debiased_coarse"` opens the bias-corrected data on the GCM's
-    native grid instead of the downscaled 0.25 degree product.
+    `product` is "downscaled" for the 0.25 degree data or "debiased_coarse" for
+    the bias-corrected data on the GCM's native grid.
     """
     if method not in METHODS:
         raise ValueError(f"method must be one of {METHODS}, got {method!r}")
@@ -507,10 +419,10 @@ def output_filename(
     start: str | None = None,
     end: str | None = None,
     *,
-    gcm: str = "CESM2-WACCM6",
-    method: str = "bcsd",
-    member: str | None = None,
-    product: str = "downscaled",
+    gcm: str,
+    method: str,
+    member: str,
+    product: str,
     label: str | None = None,
     point: tuple[float, float] | None = None,
     months=None,
@@ -523,9 +435,9 @@ def output_filename(
         india_CESM2-WACCM6_bcsd_ssp245_003_tas_2050-2055.nc
 
     The ensemble member alone is not enough to tell downloads apart -- on
-    CESM2-WACCM6 both ssp245/tas and g6_1p5k/tas default to member 003 -- so
+    CESM2-WACCM6 both ssp245/tas and g6_1p5k/tas have a member 003 -- so
     the scenario, GCM and method are all part of the name. The reverse matters
-    too: one scenario publishes up to ten members, so the member has to be in
+    too: one scenario contains up to ten members, so the member has to be in
     the name for those to land in separate files.
 
     The bias-corrected product would otherwise collide with the downscaled one
