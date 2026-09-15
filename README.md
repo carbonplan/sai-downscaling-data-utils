@@ -31,6 +31,8 @@ Launch JupyterLab and open the notebook to start working with the data.
 > [!IMPORTANT]
 > Data associated with this repository are subject to additional [terms of data access](https://carbonplan.github.io/srm-downscaling/terms-of-data-access.html).
 
+Terms used across this repository, such as *store*, *group*, *chunk* and *ensemble member*, are defined in the [glossary](GLOSSARY.md). Storage terms there follow the Zarr and Icechunk documentation.
+
 ## installation
 
 All installation steps are run from a terminal. Once you have a terminal open, follow the steps below.
