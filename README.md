@@ -14,9 +14,9 @@
   </a>
 </p>
 
-# srm-downscaling-data-utils
+# sai-downscaling-data-utils
 
-This repository shares utilities for accessing and analyzing output from the [srm-downscaling project](https://carbonplan.github.io/srm-downscaling/). Start with [`notebooks/quickstart.ipynb`](notebooks/quickstart.ipynb), which runs one complete workflow (load, subset, convert units and export) in a few cells. [`notebooks/subsetting-and-exporting.ipynb`](notebooks/subsetting-and-exporting.ipynb) is the long-form companion: it covers each step in depth, from choosing a dataset and sizing a request to quality flags and the bias-corrected data.
+This repository shares utilities for accessing and analyzing output from the [srm-downscaling project](https://carbonplan.github.io/srm-downscaling/). If you're new to the data, start with [`notebooks/quickstart.ipynb`](notebooks/quickstart.ipynb). It's a short example that loads data for one region and season and saves the result to a file. [`notebooks/subsetting-and-exporting.ipynb`](notebooks/subsetting-and-exporting.ipynb) goes through each of those steps in more detail.
 
 To get started, we recommend following the steps below:
 
@@ -24,14 +24,14 @@ To get started, we recommend following the steps below:
 Install Git and Pixi, then clone the repository and install dependencies.
 
 **02 — [Run the notebooks](#running-the-notebooks)**
-Launch JupyterLab and open the quickstart, then the long-form notebook for more.
+Launch JupyterLab and open the notebooks to start working with the data.
 
 ## data
 
 > [!IMPORTANT]
 > Data associated with this repository are subject to additional [terms of data access](https://carbonplan.github.io/srm-downscaling/terms-of-data-access.html).
 
-Terms used across this repository, such as *store*, *group*, *chunk* and *ensemble member*, are defined in the [glossary](GLOSSARY.md). Storage terms there follow the Zarr and Icechunk documentation.
+If you come across a term you don't know (e.g. *store*, *group* or *chunk*), check the [glossary](GLOSSARY.md). We use the same terms as the Zarr and Icechunk documentation.
 
 ## installation
 
@@ -50,8 +50,8 @@ If not installed, follow the [installation instructions](https://git-scm.com/dow
 Clone the repository:
 
 ```bash
-git clone https://github.com/carbonplan/srm-downscaling-data-utils
-cd srm-downscaling-data-utils
+git clone https://github.com/carbonplan/sai-downscaling-data-utils
+cd sai-downscaling-data-utils
 ```
 
 Cloning the repository will copy the access utilities here on Github to your computer to allow you to run them.
@@ -76,12 +76,12 @@ pixi install
 
 ## running the notebooks
 
-The `notebooks/` folder holds four notebooks:
+There are four notebooks in the `notebooks/` folder:
 
-- [`quickstart.ipynb`](notebooks/quickstart.ipynb): one complete workflow, from loading a dataset to exporting a regional mean.
-- [`subsetting-and-exporting.ipynb`](notebooks/subsetting-and-exporting.ipynb): the long-form version, covering each step in depth with example analysis code.
-- [`compute-resources.ipynb`](notebooks/compute-resources.ipynb): running a global analysis on a small machine, with measured results.
-- [`input-data.ipynb`](notebooks/input-data.ipynb): the GCM input data the downscaling started from (see [input data](#input-data)).
+- [`quickstart.ipynb`](notebooks/quickstart.ipynb): a short example that loads data for one region and season and saves the result to a file. Start here.
+- [`subsetting-and-exporting.ipynb`](notebooks/subsetting-and-exporting.ipynb): a longer walk-through of each step, with more options and example analysis code.
+- [`compute-resources.ipynb`](notebooks/compute-resources.ipynb): tips for running a global analysis without running out of memory.
+- [`input-data.ipynb`](notebooks/input-data.ipynb): a look at the GCM input data the downscaling started from (see [input data](#input-data)).
 
 One way to run the notebooks is using JupyterLab. Starting JupyterLab via Pixi helps ensure all the required packages are available.
 
@@ -89,7 +89,7 @@ One way to run the notebooks is using JupyterLab. Starting JupyterLab via Pixi h
 pixi run jupyter lab
 ```
 
-Then open a notebook from the `notebooks/` folder. The quickstart, long-form and compute-resources notebooks import their helper functions from the [`scripts/`](scripts/README.md) folder, so open them from inside the cloned repository. The long-form notebook walks through:
+Then open a notebook from the `notebooks/` folder. Most of the notebooks use helper functions from the [`scripts/`](scripts/README.md) folder, so open them from inside the cloned repository. The `subsetting-and-exporting.ipynb` notebook walks through:
 
 - Loading the downscaled dataset from cloud storage
 - Selecting a region of interest using a vector boundary (Natural Earth or your own file)
@@ -177,7 +177,7 @@ pt28.6N-77.2E_CESM2-WACCM6_bcsd_ssp245_003_tas_2050-2055.nc
 bbox-68E-6N-98E-38N_CESM2-WACCM6_bcsd_ssp245_003_pr_2050-2059.nc
 ```
 
-Coordinates carry hemisphere letters rather than signs, so a point at 40, -105 becomes `pt40N-105W`. Pass `--output` to choose a name yourself.
+Coordinates are written with N/S and E/W instead of plus and minus signs, so a point at 40, -105 becomes `pt40N-105W`. Pass `--output` if you'd rather choose the name yourself.
 
 Pass `--qa-flags` to write the published quality flags alongside the variable.
 
@@ -225,4 +225,4 @@ All the code in this repository is [MIT](https://choosealicense.com/licenses/mit
 
 ## about us
 
-CarbonPlan is a non-profit organization that uses data and science for climate action. We aim to improve the transparency and scientific integrity of carbon removal and climate solutions through open data and tools. Find out more at [carbonplan.org](https://carbonplan.org/) or get in touch by [opening an issue](https://github.com/carbonplan/srm-downscaling-data-utils/issues/new) or [sending us an email](mailto:hello@carbonplan.org).
+CarbonPlan is a non-profit organization that uses data and science for climate action. We aim to improve the transparency and scientific integrity of carbon removal and climate solutions through open data and tools. Find out more at [carbonplan.org](https://carbonplan.org/) or get in touch by [opening an issue](https://github.com/carbonplan/sai-downscaling-data-utils/issues/new) or [sending us an email](mailto:hello@carbonplan.org).

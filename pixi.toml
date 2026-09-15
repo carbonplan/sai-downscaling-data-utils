@@ -1,7 +1,7 @@
 [workspace]
     authors   = ["CarbonPlan <hello@carbonplan.org>"]
     channels  = ["conda-forge"]
-    name      = "srm-downscaling-data-utils"
+    name      = "sai-downscaling-data-utils"
     platforms = ["linux-64", "osx-arm64", "win-64"]
     version   = "0.1.0"
 

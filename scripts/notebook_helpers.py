@@ -147,7 +147,7 @@ def request_size_examples(da: xr.DataArray) -> None:
     # 2. A region over a decade -- still very reasonable
     describe_request(da.sel(time=decade, lat=slice(6, 38), lon=slice(68, 98)), "India box, 10 yr")
 
-    # 3. Global over a decade -- this is the one that kills kernels
+    # 3. Global over a decade -- the kind of request that crashes notebooks if loaded all at once
     describe_request(da.sel(time=decade), "Global, 10 yr")
 
     # 4. A single global day -- 4 MB of numbers, tens of GB of reads
