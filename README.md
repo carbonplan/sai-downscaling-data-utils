@@ -92,13 +92,6 @@ Then open `notebooks/subsetting-and-exporting.ipynb`. The notebook walks through
 - Downloading to a local file
 
 
-NOTE TO REMOVE: @anderson I don't understand the usecase for the line below - can we cut it?
-To execute the notebook non-interactively (e.g. for testing):
-
-```bash
-pixi run jupyter nbconvert --to notebook --execute --inplace notebooks/subsetting-and-exporting.ipynb
-```
-
 ## downloading data from the command line
 
 If you know the exact data you want and don't want to bother with an interactive session, `scripts/download.sh` is a
@@ -126,7 +119,7 @@ Download a region as `NetCDF`:
 ```bash
 ./scripts/download.sh --scenario g6_1p5k --variable pr \
     --bbox 68 6 98 38 --start 2050-01-01 --end 2059-12-31 \
-    --output india_pr.zarr
+    --output india_pr.nc
 ```
 
 Download a region as `Zarr`:
