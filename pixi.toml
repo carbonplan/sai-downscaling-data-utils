@@ -1,7 +1,7 @@
 [workspace]
     authors   = ["CarbonPlan <hello@carbonplan.org>"]
     channels  = ["conda-forge"]
-    name      = "srm-downscaling-data-utils"
+    name      = "sai-downscaling-data-utils"
     platforms = ["linux-64", "osx-arm64", "win-64"]
     version   = "0.1.0"
 
@@ -28,7 +28,7 @@
     rasterix  = ">=0.2.1, <0.3"
     rusterize = ">=0.8.0, <0.9"
 
-# Optional environment for the Section 7 global benchmark. Not installed by
+# Optional environment for the global benchmark in notebooks/compute-resources.ipynb. Not installed by
 # default: `pixi install` is unchanged, only `pixi run -e cloud ...` pulls this in.
 # Note: coiled is Elastic-2.0 licensed, unlike the MIT code in this repo.
 [feature.cloud.dependencies]
