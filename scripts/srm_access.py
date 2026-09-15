@@ -1,10 +1,7 @@
 """Shared access helpers for the CarbonPlan SRM downscaling dataset.
 
-This module is the canonical home for the details that change when the
-dataset is republished: which store to open, the pinned branch, the group
-layout, and which ensemble member a bare request resolves to. Keeping them in
-one place matters -- the notebook in this repository once sat broken for a
-whole release because a dead store path was hard-coded in a second location.
+This module is the one place that knows which store to open, the group layout,
+and which ensemble member a bare request resolves to.
 
 Each store publishes two products, as zarr groups::
 
@@ -20,10 +17,9 @@ differently. It also carries ``dtr``, the diurnal temperature range, which the
 pipeline bias-corrects only in order to reconstruct tasmin.
 
 **Nothing about either tree is transcribed here.** The published store is the
-authority. Opening a branch resolves it to one snapshot whose manifest lists
-every group, so walking the whole hierarchy costs milliseconds, and
-``layout()`` reads the tree rather than keeping a hand-maintained table that
-goes stale every release.
+authority. Opening a store fetches one manifest that lists every group, so
+walking the whole hierarchy costs milliseconds, and ``layout()`` reads the
+tree rather than keeping a hand-maintained table.
 """
 
 from __future__ import annotations
@@ -55,18 +51,17 @@ __all__ = [
     "load_downscaling_store",
     "describe_request",
     "output_filename",
+    "point_tag",
+    "bbox_tag",
 ]
 
 BUCKET = "us-west-2.opendata.source.coop"
 REGION = "us-west-2"
 _PREFIX = "carbonplan/srm-downscaling/output/production"
 
-# There are zero tags on these stores, so pinning a branch is the only way to
-# get reproducible reads.
 STORE_BRANCH = "v1.0.0"
 
-# One store per GCM. Only these two publish v1.0.0; MIROC-ES2H exists but is
-# still at v0.13.0, which has a different group layout, so it is not offered.
+# One store per GCM.
 _STORES = {
     "CESM2-WACCM6": "CESM2-WACCM6-ERA5-global",
     "UKESM1-1-LL": "UKESM1-1-LL-ERA5-global",
@@ -93,10 +88,8 @@ COARSE_ONLY_VARIABLES = ["dtr"]
 # piece of editorial judgement in the module -- the store publishes several
 # members and cannot say which one a newcomer should get -- so it is written
 # out rather than derived. Each pin is checked against the published tree
-# before it is used, so a member retired in a later release fails loudly.
+# before it is used, so a pin that does not match the store fails loudly.
 #
-# These reproduce the single members published before v1.0.0, whose data is
-# byte-identical there, so pinning the new branch changes no existing result.
 # dtr rides with tasmax/tasmin, which come from the same batch of members.
 # Both products publish the same members, so one table serves both.
 # "*" is the fallback for any variable without its own entry.
@@ -121,8 +114,8 @@ _DEFAULT_MEMBERS = {
 
 
 @functools.cache
-def _open_root(gcm: str, branch: str):
-    """Open a store's root group. Cached: one manifest fetch per (gcm, branch)."""
+def _open_root(gcm: str):
+    """Open a store's root group. Cached: one manifest fetch per GCM."""
     import icechunk
     import zarr
 
@@ -132,13 +125,13 @@ def _open_root(gcm: str, branch: str):
         anonymous=True,
         region=REGION,
     )
-    session = icechunk.Repository.open(storage).readonly_session(branch=branch)
+    session = icechunk.Repository.open(storage).readonly_session(branch=STORE_BRANCH)
     return session, zarr.open_group(session.store, mode="r", zarr_format=3)
 
 
 @functools.cache
-def _layout(gcm: str, branch: str, product: str) -> dict:
-    _, root = _open_root(gcm, branch)
+def _layout(gcm: str, product: str) -> dict:
+    _, root = _open_root(gcm)
     segment = _PRODUCT_SEGMENT[product]
     product_segments = {s for s in _PRODUCT_SEGMENT.values() if s}
     tree = {}
@@ -180,23 +173,21 @@ def _group_path(method: str, scenario: str, variable: str, member: str, product:
     return "/".join(p for p in (method, segment, scenario, variable, member) if p)
 
 
-def layout(
-    gcm: str = "CESM2-WACCM6", branch: str | None = None, *, product: str = "downscaled"
-) -> dict:
+def layout(gcm: str = "CESM2-WACCM6", *, product: str = "downscaled") -> dict:
     """Report what the store publishes, as {method: {scenario: {variable: [members]}}}.
 
-    Read from the store rather than transcribed, so it cannot go stale. The
-    walk is milliseconds once the branch is open, and the result is cached.
+    Read from the store rather than transcribed. The walk is milliseconds once
+    the store is open, and the result is cached.
     """
     _check_gcm(gcm)
     _check_product(product)
-    return copy.deepcopy(_layout(gcm, branch or STORE_BRANCH, product))
+    return copy.deepcopy(_layout(gcm, product))
 
 
 def _scenarios(gcm: str, method: str, product: str) -> dict:
     _check_gcm(gcm)
     _check_product(product)
-    tree = _layout(gcm, STORE_BRANCH, product)
+    tree = _layout(gcm, product)
     if method not in tree:
         raise ValueError(
             f"method must be one of {sorted(tree)} for {_where(gcm, '', product)}, got {method!r}"
@@ -238,8 +229,8 @@ def members_for(
 ) -> list[str]:
     """Ensemble members published for a (scenario, variable) pair.
 
-    v1.0.0 publishes several members for most scenarios, and they do not all
-    carry the same variables: on CESM2-WACCM6/ssp245, members 001-005 run to
+    Most scenarios publish several members, and they do not all carry the
+    same variables: on CESM2-WACCM6/ssp245, members 001-005 run to
     2099 with tas/pr/rsds only, while 006-010 stop in 2069 and are the only
     ones with tasmax/tasmin. Both products publish the same members.
     """
@@ -287,8 +278,8 @@ def _resolve_member(
         )
     if default not in published:
         raise ValueError(
-            f"the pinned default member {default!r} is no longer published for {where} on "
-            f"branch {STORE_BRANCH}; pass member= explicitly, one of {published}"
+            f"the pinned default member {default!r} is not published for {where}; "
+            f"pass member= explicitly, one of {published}"
         )
     return default
 
@@ -311,8 +302,8 @@ def ensemble_member(
 
 
 @functools.cache
-def _coverage(gcm: str, group_path: str, branch: str):
-    _, root = _open_root(gcm, branch)
+def _coverage(gcm: str, group_path: str):
+    _, root = _open_root(gcm)
     time = root[group_path]["time"]
     stamps = xr.coding.times.decode_cf_datetime(
         np.asarray([time[0], time[-1]]),
@@ -338,7 +329,7 @@ def coverage(
     """
     resolved = _resolve_member(scenario, variable, gcm, method, member, product)
     path = _group_path(method, scenario, variable, resolved, product)
-    return _coverage(gcm, path, STORE_BRANCH)
+    return _coverage(gcm, path)
 
 
 def check_members(
@@ -353,8 +344,8 @@ def check_members(
 
     On CESM2-WACCM6 the temperature extremes come from a different batch of
     members than tas/pr/rsds, so the defaults for tas and tasmax do not match
-    and combining them mixes realizations. Since v1.0.0 that is usually
-    avoidable: several members carry every variable, and this reports them.
+    and combining them mixes realizations. That is usually avoidable: several
+    members carry every variable, and this reports them.
     """
     members = {v: ensemble_member(scenario, v, gcm, method, product=product) for v in variables}
     where = _where(gcm, "", product, scenario)
@@ -384,7 +375,7 @@ def qa_flag_vars(ds: xr.Dataset, variable: str | None = None) -> list[str]:
 
     A group holds its own variable plus zero or more binary flags, so a flag is
     every data variable that is not the group's variable. That rule holds for
-    every group in v1.0.0, in both products. Matching on names does not:
+    every published group, in both products. Matching on names does not:
     ``trend_distortion_flag`` has no ``qa_flag`` prefix.
 
     `variable` defaults to the group's ``srm_downscaling:variable`` attribute.
@@ -427,7 +418,7 @@ def load_downscaling_store(
     # Also validates gcm, product, scenario, variable and member against the store.
     resolved = _resolve_member(scenario, variable, gcm, method, member, product)
 
-    session, _ = _open_root(gcm, STORE_BRANCH)
+    session, _ = _open_root(gcm)
     ds = xr.open_dataset(
         session.store,
         group=_group_path(method, scenario, variable, resolved, product),
@@ -490,6 +481,26 @@ def _month_tag(months) -> str:
     return "".join(f"m{m:02d}" for m in key)
 
 
+def _hemisphere(value: float, positive: str, negative: str) -> str:
+    return f"{abs(value):g}{positive if value >= 0 else negative}"
+
+
+def point_tag(lat: float, lon: float) -> str:
+    """Filename prefix for a single point, with hemisphere letters: ``pt40N-105W``.
+
+    Letters rather than signs keep the name unambiguous, since ``-`` also
+    separates the two numbers.
+    """
+    return f"pt{_hemisphere(lat, 'N', 'S')}-{_hemisphere(lon, 'E', 'W')}"
+
+
+def bbox_tag(lon_min: float, lat_min: float, lon_max: float, lat_max: float) -> str:
+    """Filename prefix for a bounding box, in ``--bbox`` order: ``bbox-68E-6N-98E-38N``."""
+    hemispheres = (("E", "W"), ("N", "S"), ("E", "W"), ("N", "S"))
+    values = (lon_min, lat_min, lon_max, lat_max)
+    return "bbox-" + "-".join(_hemisphere(v, *h) for v, h in zip(values, hemispheres))
+
+
 def output_filename(
     scenario: str,
     variable: str,
@@ -501,6 +512,7 @@ def output_filename(
     member: str | None = None,
     product: str = "downscaled",
     label: str | None = None,
+    point: tuple[float, float] | None = None,
     months=None,
     suffix: str = ".nc",
 ) -> str:
@@ -512,17 +524,22 @@ def output_filename(
 
     The ensemble member alone is not enough to tell downloads apart -- on
     CESM2-WACCM6 both ssp245/tas and g6_1p5k/tas default to member 003 -- so
-    the scenario, GCM and method are all part of the name. Since v1.0.0 the
-    reverse matters too: one scenario publishes up to ten members, so the
-    member has to be in the name for those to land in separate files.
+    the scenario, GCM and method are all part of the name. The reverse matters
+    too: one scenario publishes up to ten members, so the member has to be in
+    the name for those to land in separate files.
 
     The bias-corrected product would otherwise collide with the downscaled one
     for the same selection, so it tags the method field --
-    ``..._bcsd-debiased-coarse_...`` -- while downscaled names stay unchanged.
+    ``..._bcsd-debiased-coarse_...`` -- while downscaled names carry the bare method.
 
     `label` is a free-text prefix describing the region or purpose; underscores
-    in it are converted to hyphens so `_` stays a clean field separator.
+    in it are converted to hyphens so `_` stays a clean field separator. With no
+    `label`, `point=(lat, lon)` names a single-point export by its coordinates
+    -- ``pt28.6N-77.2E_...``, see point_tag() -- the same prefix the command-line
+    tool uses.
     """
+    if not label and point is not None:
+        label = point_tag(*point)
     resolved = ensemble_member(scenario, variable, gcm, method, member, product=product)
     method_tag = method if product == "downscaled" else f"{method}-{product.replace('_', '-')}"
     bits = []
@@ -537,5 +554,5 @@ def output_filename(
         bits.append(_month_tag(months))
 
     if not suffix.startswith("."):
-        suffix = "." + suffix
+        suffix = f".{suffix}"
     return "_".join(bits) + suffix

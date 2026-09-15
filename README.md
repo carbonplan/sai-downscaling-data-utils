@@ -31,6 +31,8 @@ Launch JupyterLab and open the notebook to start working with the data.
 > [!IMPORTANT]
 > Data associated with this repository are subject to additional [terms of data access](https://carbonplan.github.io/srm-downscaling/terms-of-data-access.html).
 
+Terms used across this repository, such as *store*, *group*, *chunk* and *ensemble member*, are defined in the [glossary](GLOSSARY.md). Storage terms there follow the Zarr and Icechunk documentation.
+
 ## installation
 
 All installation steps are run from a terminal. Once you have a terminal open, follow the steps below.
@@ -166,10 +168,11 @@ Output files are named after the data they contain, so repeated downloads never
 overwrite one another:
 
 ```
-pt28.6-77.2_CESM2-WACCM6_bcsd_ssp245_003_tas_2050-2055.nc
+pt28.6N-77.2E_CESM2-WACCM6_bcsd_ssp245_003_tas_2050-2055.nc
+bbox-68E-6N-98E-38N_CESM2-WACCM6_bcsd_ssp245_003_pr_2050-2059.nc
 ```
 
-Pass `--output` to choose a name yourself.
+Coordinates carry hemisphere letters rather than signs, so a point at 40, -105 becomes `pt40N-105W`. Pass `--output` to choose a name yourself.
 
 Pass `--qa-flags` to write the published quality flags alongside the variable.
 

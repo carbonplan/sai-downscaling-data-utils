@@ -48,14 +48,15 @@ from srm_access import (  # noqa: E402
     GCMS,
     METHODS,
     PRODUCTS,
-    STORE_BRANCH,
     VARIABLES,
+    bbox_tag,
     coverage,
     describe_request,
     ensemble_member,
     load_downscaling_store,
     members_for,
     output_filename,
+    point_tag,
     qa_flag_vars,
     variables_for,
 )
@@ -183,9 +184,9 @@ def _human(nbytes: int) -> str:
 def default_output(args, member: str) -> Path:
     """Self-describing filename, so downloads never overwrite one another."""
     if args.point:
-        label = f"pt{args.point[0]:g}-{args.point[1]:g}"
+        label = point_tag(*args.point)
     elif args.bbox:
-        label = "bbox-" + "-".join(f"{v:g}" for v in args.bbox)
+        label = bbox_tag(*args.bbox)
     else:
         label = "global"
     suffix = ".zarr" if args.format == "zarr" else ".nc"
@@ -214,7 +215,7 @@ def list_input_members(args) -> int:
             carried.setdefault(member, []).append(variable)
 
     days = inputs.shard_days(args.scenario, variables[0], args.gcm)
-    print(f"{_address(args)} (branch {inputs.INPUT_BRANCH}; spans accurate to within {days} days, "
+    print(f"{_address(args)} (spans accurate to within {days} days, "
           "and --start/--end are checked exactly)")
     print(f"{'member':12s} {'coverage':25s} variables")
     for member in sorted(carried):
@@ -245,7 +246,7 @@ def list_members(args) -> int:
         for member in members_for(args.scenario, variable, args.gcm, args.method, product=args.product):
             carried.setdefault(member, []).append(variable)
 
-    print(f"{_address(args)} (branch {STORE_BRANCH})")
+    print(_address(args))
     print(f"{'member':12s} {'coverage':25s} variables")
     for member in sorted(carried):
         first, last = coverage(
@@ -277,7 +278,6 @@ def main(argv=None) -> int:
             # record, so read the real edges: about ten chunk reads.
             first, last = inputs.coverage(args.scenario, args.variable, args.gcm, member, exact=True)
             ds = inputs.load_input_store(args.scenario, args.variable, args.gcm, member)
-            branch = inputs.INPUT_BRANCH
         else:
             member = ensemble_member(
                 args.scenario, args.variable, args.gcm, args.method, args.member,
@@ -290,13 +290,12 @@ def main(argv=None) -> int:
             # Read coverage off the axis we just opened rather than a transcribed table,
             # so it is always the member's own record.
             first, last = (str(ds.time.values[i])[:10] for i in (0, -1))
-            branch = STORE_BRANCH
     except (ValueError, RuntimeError) as exc:
         raise SystemExit(f"error: {exc}")
 
     validate_dates(args, member, first, last)
 
-    print(f"{_address(args, args.variable)} -> member {member} (branch {branch})")
+    print(f"{_address(args, args.variable)} -> member {member}")
     print(f"coverage: {first} to {last}")
 
     if args.start or args.end:
