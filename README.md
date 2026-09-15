@@ -84,7 +84,7 @@ One way to run the notebook is using JupyterLab. Starting JupyterLab via Pixi he
 pixi run jupyter lab
 ```
 
-Then open `notebooks/subsetting-and-exporting.ipynb`. The notebook walks through:
+Then open `notebooks/subsetting-and-exporting.ipynb`. It imports its helper functions from the [`scripts/`](scripts/README.md) folder, so open it from inside the cloned repository. The notebook walks through:
 
 - Loading the downscaled dataset from cloud storage
 - Selecting a region of interest using a vector boundary (Natural Earth or your own file)
