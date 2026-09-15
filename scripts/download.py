@@ -49,12 +49,14 @@ from srm_access import (  # noqa: E402
     METHODS,
     PRODUCTS,
     VARIABLES,
+    bbox_tag,
     coverage,
     describe_request,
     ensemble_member,
     load_downscaling_store,
     members_for,
     output_filename,
+    point_tag,
     qa_flag_vars,
     variables_for,
 )
@@ -182,9 +184,9 @@ def _human(nbytes: int) -> str:
 def default_output(args, member: str) -> Path:
     """Self-describing filename, so downloads never overwrite one another."""
     if args.point:
-        label = f"pt{args.point[0]:g}-{args.point[1]:g}"
+        label = point_tag(*args.point)
     elif args.bbox:
-        label = "bbox-" + "-".join(f"{v:g}" for v in args.bbox)
+        label = bbox_tag(*args.bbox)
     else:
         label = "global"
     suffix = ".zarr" if args.format == "zarr" else ".nc"

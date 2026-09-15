@@ -51,6 +51,8 @@ __all__ = [
     "load_downscaling_store",
     "describe_request",
     "output_filename",
+    "point_tag",
+    "bbox_tag",
 ]
 
 BUCKET = "us-west-2.opendata.source.coop"
@@ -479,6 +481,26 @@ def _month_tag(months) -> str:
     return "".join(f"m{m:02d}" for m in key)
 
 
+def _hemisphere(value: float, positive: str, negative: str) -> str:
+    return f"{abs(value):g}{positive if value >= 0 else negative}"
+
+
+def point_tag(lat: float, lon: float) -> str:
+    """Filename prefix for a single point, with hemisphere letters: ``pt40N-105W``.
+
+    Letters rather than signs keep the name unambiguous, since ``-`` also
+    separates the two numbers.
+    """
+    return f"pt{_hemisphere(lat, 'N', 'S')}-{_hemisphere(lon, 'E', 'W')}"
+
+
+def bbox_tag(lon_min: float, lat_min: float, lon_max: float, lat_max: float) -> str:
+    """Filename prefix for a bounding box, in ``--bbox`` order: ``bbox-68E-6N-98E-38N``."""
+    hemispheres = (("E", "W"), ("N", "S"), ("E", "W"), ("N", "S"))
+    values = (lon_min, lat_min, lon_max, lat_max)
+    return "bbox-" + "-".join(_hemisphere(v, *h) for v, h in zip(values, hemispheres))
+
+
 def output_filename(
     scenario: str,
     variable: str,
@@ -490,6 +512,7 @@ def output_filename(
     member: str | None = None,
     product: str = "downscaled",
     label: str | None = None,
+    point: tuple[float, float] | None = None,
     months=None,
     suffix: str = ".nc",
 ) -> str:
@@ -510,8 +533,13 @@ def output_filename(
     ``..._bcsd-debiased-coarse_...`` -- while downscaled names carry the bare method.
 
     `label` is a free-text prefix describing the region or purpose; underscores
-    in it are converted to hyphens so `_` stays a clean field separator.
+    in it are converted to hyphens so `_` stays a clean field separator. With no
+    `label`, `point=(lat, lon)` names a single-point export by its coordinates
+    -- ``pt28.6N-77.2E_...``, see point_tag() -- the same prefix the command-line
+    tool uses.
     """
+    if not label and point is not None:
+        label = point_tag(*point)
     resolved = ensemble_member(scenario, variable, gcm, method, member, product=product)
     method_tag = method if product == "downscaled" else f"{method}-{product.replace('_', '-')}"
     bits = []
@@ -526,5 +554,5 @@ def output_filename(
         bits.append(_month_tag(months))
 
     if not suffix.startswith("."):
-        suffix = "." + suffix
+        suffix = f".{suffix}"
     return "_".join(bits) + suffix
