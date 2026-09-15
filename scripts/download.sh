@@ -13,7 +13,7 @@
 #   ./scripts/download.sh --scenario historical --variable tas \
 #       --point 28.6 77.2 --start 1990-01-01 --end 1999-12-31 --output delhi.nc
 #
-# Requests reading more than 5 GB prompt for confirmation; pass --yes to skip.
+# Requests reading more than 1 GB prompt for confirmation; pass --yes to skip.
 
 set -euo pipefail
 

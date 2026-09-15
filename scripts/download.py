@@ -17,7 +17,7 @@ Download a single-point time series::
         --point 28.6 77.2 --start 1990-01-01 --end 1999-12-31 \
         --output delhi.nc
 
-See which ensemble members a scenario publishes, and what each one covers::
+See which ensemble members a scenario contains, and what each one covers::
 
     python scripts/download.py --scenario ssp245 --list-members
 
@@ -43,7 +43,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import input_access as inputs  # noqa: E402
-from srm_access import (  # noqa: E402
+from data_access import (  # noqa: E402
     COARSE_ONLY_VARIABLES,
     GCMS,
     METHODS,
@@ -95,16 +95,16 @@ def parse_args(argv=None) -> argparse.Namespace:
     )
     p.add_argument(
         "--variable", default="tas", choices=VARIABLES + COARSE_ONLY_VARIABLES + INPUT_ONLY_VARIABLES,
-        help="dtr is published with --product debiased_coarse only; hurs with --product input only",
+        help="dtr is available with --product debiased_coarse only; hurs with --product input only",
     )
     p.add_argument(
         "--member",
         help="ensemble member (default: the pinned member for this scenario/variable); "
-             "run --list-members to see what a scenario publishes",
+             "run --list-members to see what a scenario contains",
     )
     p.add_argument(
         "--list-members", action="store_true",
-        help="list the members published for --scenario, with coverage, then exit",
+        help="list the members available for --scenario, with coverage, then exit",
     )
     p.add_argument("--start", help="ISO start date, e.g. 2050-01-01")
     p.add_argument("--end", help="ISO end date, e.g. 2059-12-31")
@@ -141,7 +141,7 @@ def _check_product_args(args) -> None:
             raise SystemExit("error: the input stores carry no quality flags; drop --qa-flags")
         return
     if args.variable in INPUT_ONLY_VARIABLES:
-        raise SystemExit(f"error: {args.variable} is published only with --product input")
+        raise SystemExit(f"error: {args.variable} is available only with --product input")
     if args.method is None:
         args.method = "bcsd"
 
@@ -233,7 +233,7 @@ def list_input_members(args) -> int:
 
 
 def list_members(args) -> int:
-    """Print what a scenario publishes: members, coverage, and variables each carries.
+    """Print what a scenario contains: members, coverage, and variables each carries.
 
     Coverage is a property of the member, not the variable -- on CESM2-WACCM6
     ssp245, members 001-005 run to 2099 while 006-010 stop in 2069 and are the

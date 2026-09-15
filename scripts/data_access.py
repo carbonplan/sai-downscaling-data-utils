@@ -238,9 +238,9 @@ def members_for(
     if variable not in variables:
         hint = ""
         if variable in COARSE_ONLY_VARIABLES and product != "debiased_coarse":
-            hint = f"; {variable} is published only with product='debiased_coarse'"
+            hint = f"; {variable} is available only with product='debiased_coarse'"
         raise ValueError(
-            f"{_where(gcm, method, product, scenario)} publishes {sorted(variables)}, "
+            f"{_where(gcm, method, product, scenario)} contains {sorted(variables)}, "
             f"not {variable!r}{hint}"
         )
     return list(variables[variable])
@@ -267,7 +267,7 @@ def _resolve_member(
     if member is not None:
         if member not in published:
             raise ValueError(
-                f"member {member!r} is not published for {where}; available: {published}"
+                f"member {member!r} is not available for {where}; available: {published}"
             )
         return member
 
@@ -278,7 +278,7 @@ def _resolve_member(
         )
     if default not in published:
         raise ValueError(
-            f"the pinned default member {default!r} is not published for {where}; "
+            f"the pinned default member {default!r} is not available for {where}; "
             f"pass member= explicitly, one of {published}"
         )
     return default

@@ -9,7 +9,7 @@ for where those stores live and how to read them.
 The stores sit on CarbonPlan's ``carbonplan-srm`` bucket until they move to
 source.coop, so their location is kept in one constants block below.
 
-Two things differ from the published output in srm_access.py:
+Two things differ from the published output in data_access.py:
 
 * **Members are a dimension, not groups.** A group's time axis spans the whole
   scenario, and a member that lacks a variable or some years holds NaN there.
@@ -25,7 +25,7 @@ import functools
 import numpy as np
 import xarray as xr
 
-from srm_access import _month_tag, describe_request, pinned_member
+from data_access import _month_tag, describe_request, pinned_member
 
 __all__ = [
     "INPUT_BUCKET",
@@ -188,7 +188,7 @@ def ensemble_member(
     """Which member a request resolves to, validated against the store.
 
     Omitting `member` takes the member pinned for the downscaled output
-    (srm_access.pinned_member), so the default input is the run the default
+    (data_access.pinned_member), so the default input is the run the default
     downscaled data was built from.
     """
     published = members_for(scenario, variable, gcm)
@@ -326,7 +326,7 @@ def output_filename(
     months=None,
     suffix: str = ".nc",
 ) -> str:
-    """A self-describing filename, in srm_access.output_filename's format with `input` as the method:
+    """A self-describing filename, in data_access.output_filename's format with `input` as the method:
 
         delhi_CESM2-WACCM6_input_ssp245_003_tas_2050-2059.nc
     """

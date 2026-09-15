@@ -16,15 +16,15 @@
 
 # srm-downscaling-data-utils
 
-This repository shares utilities for accessing and analyzing output from the [srm-downscaling project](https://carbonplan.github.io/srm-downscaling/). You'll probably be primarily interested in [`notebooks/subsetting-and-exporting.ipynb`](notebooks/subsetting-and-exporting.ipynb), which provides tools for accessing, subsetting, transforming, and exporting the downscaled data from the cloud to your local environment.
+This repository shares utilities for accessing and analyzing output from the [srm-downscaling project](https://carbonplan.github.io/srm-downscaling/). Start with [`notebooks/quickstart.ipynb`](notebooks/quickstart.ipynb), which runs one complete workflow (load, subset, convert units and export) in a few cells. [`notebooks/subsetting-and-exporting.ipynb`](notebooks/subsetting-and-exporting.ipynb) is the long-form companion: it covers each step in depth, from choosing a dataset and sizing a request to quality flags and the bias-corrected data.
 
 To get started, we recommend following the steps below:
 
 **01 — [Set up your environment](#installation)**
 Install Git and Pixi, then clone the repository and install dependencies.
 
-**02 — [Run the notebook](#running-the-notebook)**
-Launch JupyterLab and open the notebook to start working with the data.
+**02 — [Run the notebooks](#running-the-notebooks)**
+Launch JupyterLab and open the quickstart, then the long-form notebook for more.
 
 ## data
 
@@ -74,17 +74,22 @@ Install dependencies (a.k.a. the packages you need to run the access utilities):
 pixi install
 ```
 
-## running the notebook
+## running the notebooks
 
-The `notebooks/subsetting-and-exporting.ipynb` notebook demonstrates how to access, subset and export the downscaled data for a region of interest. It also includes some example analysis code.
+The `notebooks/` folder holds four notebooks:
 
-One way to run the notebook is using JupyterLab. Starting JupyterLab via Pixi helps ensure all the required packages are available.
+- [`quickstart.ipynb`](notebooks/quickstart.ipynb): one complete workflow, from loading a dataset to exporting a regional mean.
+- [`subsetting-and-exporting.ipynb`](notebooks/subsetting-and-exporting.ipynb): the long-form version, covering each step in depth with example analysis code.
+- [`compute-resources.ipynb`](notebooks/compute-resources.ipynb): running a global analysis on a small machine, with measured results.
+- [`input-data.ipynb`](notebooks/input-data.ipynb): the GCM input data the downscaling started from (see [input data](#input-data)).
+
+One way to run the notebooks is using JupyterLab. Starting JupyterLab via Pixi helps ensure all the required packages are available.
 
 ```bash
 pixi run jupyter lab
 ```
 
-Then open `notebooks/subsetting-and-exporting.ipynb`. It imports its helper functions from the [`scripts/`](scripts/README.md) folder, so open it from inside the cloned repository. The notebook walks through:
+Then open a notebook from the `notebooks/` folder. The quickstart, long-form and compute-resources notebooks import their helper functions from the [`scripts/`](scripts/README.md) folder, so open them from inside the cloned repository. The long-form notebook walks through:
 
 - Loading the downscaled dataset from cloud storage
 - Selecting a region of interest using a vector boundary (Natural Earth or your own file)

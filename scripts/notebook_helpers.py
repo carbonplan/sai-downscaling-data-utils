@@ -2,7 +2,7 @@
 
 The notebook imports these so its cells can show the steps a reader adapts --
 selections, plots, exports -- without long setup and reporting code in between.
-Data access itself lives in srm_access.py, which the command-line tool shares.
+Data access itself lives in data_access.py, which the command-line tool shares.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import copy
 
 import xarray as xr
 
-from srm_access import describe_request, ensemble_member, load_downscaling_store, qa_flag_vars
+from data_access import describe_request, ensemble_member, load_downscaling_store, qa_flag_vars
 
 __all__ = [
     "DEMO_DATES",
