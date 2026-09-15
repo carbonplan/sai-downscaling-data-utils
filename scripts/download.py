@@ -73,7 +73,7 @@ INPUT_ONLY_VARIABLES = [v for v in inputs.VARIABLES if v not in VARIABLES]
 # A request reading more than this prompts for confirmation. Downscaled chunks
 # span about a year over a regional tile, so a global request reaches tens of GB
 # very easily.
-PROMPT_ABOVE_GB = 5.0
+PROMPT_ABOVE_GB = 1.0
 
 
 def parse_args(argv=None) -> argparse.Namespace:
