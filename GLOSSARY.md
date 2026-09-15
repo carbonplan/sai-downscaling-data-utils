@@ -36,7 +36,7 @@ Amazon's cloud object storage. The published stores sit in a public S3 bucket ho
 
 ### Shard
 
-One stored object that bundles several chunks, so a store holds fewer, larger objects. Chunks inside a shard are still read individually. A downscaled shard holds 3 × 5 × 5 chunks; an input shard spans 480 days (`CESM2-WACCM6`) or 960 days (`UKESM1-1-LL`).
+One stored object that bundles several chunks, so a store holds fewer, larger objects. Chunks inside a shard are still read individually, so a request reads the same chunks either way. An input shard spans 480 days (`CESM2-WACCM6`) or 960 days (`UKESM1-1-LL`), which sets how precisely the input notebook lists coverage without reading data.
 
 ### Store
 
