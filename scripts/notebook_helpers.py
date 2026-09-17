@@ -7,15 +7,12 @@ Data access itself lives in data_access.py, which the command-line tool shares.
 
 from __future__ import annotations
 
-import copy
-
 import xarray as xr
 
 from data_access import describe_request, ensemble_member, load_downscaling_store, qa_flag_vars
 
 __all__ = [
-    "DEMO_DATES",
-    "demo_dates",
+    "check_dates",
     "first_decade",
     "request_size_examples",
     "subset_bbox",
@@ -24,54 +21,25 @@ __all__ = [
     "check_tasmin_reconstruction",
 ]
 
-# Example dates for each scenario, chosen to fall inside its coverage (see the table in
-# Section 2 of the notebook). Sections 4 and 6 read from these, so they stay valid
-# whichever scenario is picked.
-DEMO_DATES = {
-    "historical": {  # 1978-2014
-        "decade_start": "1990-01-01",
-        "decade_end": "1999-12-31",
-        "single_year": "1995",
-        "baseline_start": "1980-01-01",
-        "baseline_end": "2000-12-31",
-        "export_start": "1990-01-01",
-        "export_end": "1995-12-31",
-    },
-    "ssp245": {  # 2015-2099 on members 001-005; 006-010 stop in 2069
-        "decade_start": "2050-01-01",
-        "decade_end": "2059-12-31",
-        "single_year": "2055",
-        "baseline_start": "2030-01-01",
-        "baseline_end": "2050-12-31",
-        "export_start": "2050-01-01",
-        "export_end": "2055-12-31",
-    },
-    "g6_1p5k_end": {  # 2085-2100, CESM2-WACCM6 only -- continues g6_1p5k
-        "decade_start": "2085-01-01",
-        "decade_end": "2094-12-31",
-        "single_year": "2090",
-        "baseline_start": "2085-01-01",
-        "baseline_end": "2095-12-31",
-        "export_start": "2090-01-01",
-        "export_end": "2095-12-31",
-    },
-    "g6_1p5k": {  # 2035-2084 -- note the late start
-        "decade_start": "2050-01-01",
-        "decade_end": "2059-12-31",
-        "single_year": "2055",
-        "baseline_start": "2035-01-01",
-        "baseline_end": "2055-12-31",
-        "export_start": "2050-01-01",
-        "export_end": "2055-12-31",
-    },
-}
 
+def check_dates(ds: xr.Dataset | xr.DataArray, start: str, end: str | None = None) -> None:
+    """Stop with a clear message when dates are not in quotes or fall outside the data.
 
-def demo_dates(scenario: str) -> dict[str, str]:
-    """Example date ranges that fall inside `scenario`'s coverage."""
-    if scenario not in DEMO_DATES:
-        raise ValueError(f"no demo dates for scenario {scenario!r}; one of {sorted(DEMO_DATES)}")
-    return copy.deepcopy(DEMO_DATES[scenario])
+    Pass `start` and `end` for a date range, or only `start` for a single year
+    ("2055"), month ("2055-07") or day ("2055-07-04").
+    """
+    for date in (start, end):
+        if date is not None and not isinstance(date, str):
+            raise TypeError(f'write dates as text in quotes, e.g. "2050-01-01" or "2050", not {date!r}')
+    # A slice keeps the time dimension even when it selects a single day.
+    if ds.sel(time=slice(start, end or start)).sizes["time"] == 0:
+        first, last = str(ds.time.values[0])[:10], str(ds.time.values[-1])[:10]
+        if end is None:
+            raise ValueError(f"no data for {start}. This data covers {first} to {last}.")
+        raise ValueError(
+            f"no data for {start} to {end}. This data covers {first} to {last}, "
+            "and the start date has to come before the end date."
+        )
 
 
 def first_decade(dataset: xr.Dataset | xr.DataArray) -> slice:
@@ -181,6 +149,7 @@ def summarize_quality_flags(
 
     # One year over the region, to keep this in the same size bracket as the rest of
     # the notebook. Note the flag adds its own chunks to the request.
+    check_dates(ds, year)
     region_qa = ds.sel(time=year, lat=lat, lon=lon)
 
     describe_request(region_qa[variable], f"{region}, {year}, data")
@@ -240,12 +209,13 @@ def check_tasmin_reconstruction(
     tasmax/tasmin (members_for(...) lists them). The same member is used for all three.
     """
     dtr_member = ensemble_member(scenario, "dtr", gcm, method, member, product="debiased_coarse")
-    pieces = {
-        name: load_downscaling_store(
+    pieces = {}
+    for name in ("tasmax", "tasmin", "dtr"):
+        da = load_downscaling_store(
             scenario, name, gcm=gcm, method=method, member=dtr_member, product="debiased_coarse",
-        )[name].sel(time=year, lat=lat, lon=lon)
-        for name in ("tasmax", "tasmin", "dtr")
-    }
+        )[name]
+        check_dates(da, year)
+        pieces[name] = da.sel(time=year, lat=lat, lon=lon)
 
     residual = pieces["tasmin"] - (pieces["tasmax"] - pieces["dtr"])
     check = xr.Dataset(
