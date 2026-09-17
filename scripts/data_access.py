@@ -49,6 +49,7 @@ __all__ = [
     "qa_flag_vars",
     "load_downscaling_store",
     "describe_request",
+    "check_nearest",
     "output_filename",
     "point_tag",
     "bbox_tag",
@@ -387,6 +388,91 @@ _SEASONS = {
     (6, 7, 8): "JJA",
     (9, 10, 11): "SON",
 }
+
+
+def _check_in_range(ds: xr.Dataset | xr.DataArray, name: str, value) -> None:
+    """Raise if any `value` falls outside the cells of coordinate `name`."""
+    coord = ds[name].values
+    values = np.atleast_1d(np.asarray(value))
+    if name == "time":
+        if values.dtype.kind not in "UMO":
+            raise TypeError(f'time must be a date in quotes, e.g. "2050-06-15", not {value!r}')
+        values = values.astype(coord.dtype)
+    elif values.dtype.kind not in "iuf":
+        raise TypeError(f"{name} must be a number, e.g. 28.6, not {value!r}")
+
+    lo, hi = coord.min(), coord.max()
+    # A value up to half a grid step past the outermost coordinate still falls in the edge cell.
+    half_step = np.abs(np.diff(coord)).min() / 2 if coord.size > 1 else coord[0] - coord[0]
+    if name == "lon" and hi - lo + 2 * half_step >= 360:
+        # A full circle of longitude wraps around, so every value from -180 to 180 is inside.
+        lo, hi, half_step = -180, 180, 0
+    outside = values[(values < lo - half_step) | (values > hi + half_step)]
+    if not outside.size:
+        return
+
+    show = (lambda v: str(v)[:10]) if name == "time" else (lambda v: f"{float(v):g}")
+    v = outside[0]
+    hint = ""
+    if name == "lon" and v > 180:
+        hint = f" If you meant {show(v)} degrees east, write it as {show(v - 360)}."
+    elif name == "lat" and abs(v) > 90:
+        hint = " Latitude has to be between -90 and 90, so check that lat and lon are not swapped."
+    raise ValueError(
+        f"{name} {show(v)} is outside this data, which covers {name} {show(lo)} to {show(hi)}. "
+        f"Picking the nearest grid cell would quietly give you the edge of the data instead.{hint}"
+    )
+
+
+def check_nearest(
+    ds: xr.Dataset | xr.DataArray, lat=None, lon=None, time=None, *, check_data: bool = True
+) -> None:
+    """Check that a nearest-neighbour selection lands inside the data, before you make it.
+
+    ``ds.sel(lat=..., lon=..., method="nearest")`` always returns something. Ask
+    for a point outside the data -- a city outside the box you subset to, or a
+    longitude written 0 to 360 when the data runs -180 to 180 -- and you quietly
+    get the closest edge cell instead. Ask for a point inside a clipped region's
+    bounding box but outside its outline and you get NaN. Call this first with
+    the same values you pass to ``.sel``::
+
+        check_nearest(ds, lat=28.6, lon=77.2)
+        point = ds.sel(lat=28.6, lon=77.2, method="nearest")
+
+    Values can be single numbers (dates in quotes for `time`), lists or
+    DataArrays. When both `lat` and `lon` are given and `check_data` is True, it
+    also reads the nearest cells at the first time step and raises if they hold
+    no data.
+    """
+    requested = {name: value for name, value in (("lat", lat), ("lon", lon), ("time", time)) if value is not None}
+    for name, value in requested.items():
+        _check_in_range(ds, name, value)
+    if not check_data or lat is None or lon is None:
+        return
+
+    cells = ds.sel(method="nearest", **requested)
+    if "time" in cells.dims:
+        cells = cells.isel(time=0)
+    if isinstance(cells, xr.Dataset):
+        # Flags are integers and never NaN, so look at the float variables only.
+        cells = cells[[v for v in cells.data_vars if cells[v].dtype.kind == "f"]].to_array().notnull().any("variable")
+    else:
+        cells = cells.notnull()
+    cells = cells.compute()
+    if cells.all():
+        return
+
+    if cells.ndim > 1:
+        cells = cells.stack(cell=cells.dims)
+    empty = np.flatnonzero(~np.atleast_1d(cells.values))
+    lats, lons = np.atleast_1d(cells.lat.values), np.atleast_1d(cells.lon.values)
+    where = " and ".join(f"lat {float(lats[i]):g}, lon {float(lons[i]):g}" for i in empty)
+    cell, point = ("grid cells", "points") if empty.size > 1 else ("grid cell", "point")
+    raise ValueError(
+        f"no data (NaN) in the {cell} nearest your {point}, at {where}. The {point} "
+        f"{'are' if empty.size > 1 else 'is'} probably outside the outline you clipped to, so pick "
+        f"{'points' if empty.size > 1 else 'a point'} inside it."
+    )
 
 
 def _month_tag(months) -> str:
