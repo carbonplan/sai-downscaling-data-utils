@@ -27,17 +27,3 @@
 [pypi-dependencies]
     rasterix  = ">=0.2.1, <0.3"
     rusterize = ">=0.8.0, <0.9"
-
-# Optional environment for the global benchmark in notebooks/compute-resources.ipynb. Not installed by
-# default: `pixi install` is unchanged, only `pixi run -e cloud ...` pulls this in.
-# Note: coiled is Elastic-2.0 licensed, unlike the MIT code in this repo.
-[feature.cloud.dependencies]
-    coiled = ">=1.135,<2"
-    # Pinned to match the default environment. icechunk is a compiled extension,
-    # so builds are Python-version specific, and 2.2.0 has no py3.14 linux-64
-    # build -- which breaks Coiled package-sync when mirroring this env onto a
-    # Linux VM. 2.0.5 does have one.
-    icechunk = "==2.0.5"
-
-[environments]
-    cloud = { features = ["cloud"], solve-group = "default" }
