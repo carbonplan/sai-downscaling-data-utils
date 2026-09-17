@@ -30,13 +30,17 @@ ENTRY_POINT = re.compile(
 
 
 def documented_text() -> list[tuple[str, str]]:
-    """The text of every file that shows example commands, as (name, text)."""
+    """The text of every file that shows example commands, as (name, text).
+
+    Every read says encoding="utf-8". Without it Python uses the locale encoding,
+    which is cp1252 on Windows, and the notebooks contain characters it cannot read.
+    """
     sources = [
-        (p.name, p.read_text())
+        (p.name, p.read_text(encoding="utf-8"))
         for p in (REPO / "README.md", REPO / "scripts" / "download.sh", REPO / "scripts" / "download.py")
     ]
     for path in sorted((REPO / "notebooks").glob("*.ipynb")):
-        notebook = json.loads(path.read_text())
+        notebook = json.loads(path.read_text(encoding="utf-8"))
         markdown = "\n".join(
             "".join(cell["source"]) for cell in notebook["cells"] if cell["cell_type"] == "markdown"
         )
