@@ -6,6 +6,8 @@
     version   = "0.1.0"
 
 [tasks]
+    # Cross-platform entry point for the download tool: `pixi run download --help`.
+    download = "python scripts/download.py"
 
 [dependencies]
     cftime     = ">=1.6,<2"

@@ -3,6 +3,9 @@
 # Bash entry point for downloading a subset of the SRM downscaling dataset.
 # Thin wrapper around scripts/download.py -- see `download.sh --help`.
 #
+# `pixi run download` does exactly the same thing and needs no bash, so it also
+# works on Windows. Both take the same options.
+#
 # Examples
 # --------
 #   # Estimate what a request costs, without downloading anything:
