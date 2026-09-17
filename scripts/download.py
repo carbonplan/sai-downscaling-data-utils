@@ -53,6 +53,7 @@ from data_access import (  # noqa: E402
     PRODUCTS,
     VARIABLES,
     bbox_tag,
+    check_nearest,
     coverage,
     describe_request,
     ensemble_member,
@@ -305,6 +306,11 @@ def main(argv=None) -> int:
         ds = ds.sel(time=slice(args.start, args.end))
     if args.point:
         lat, lon = args.point
+        try:
+            # The data is global, so only a point off the grid (e.g. longitude 0-360) can miss.
+            check_nearest(ds, lat=lat, lon=lon, check_data=False)
+        except ValueError as exc:
+            raise SystemExit(f"error: {exc}")
         ds = ds.sel(lat=lat, lon=lon, method="nearest")
     elif args.bbox:
         lon_min, lat_min, lon_max, lat_max = args.bbox
