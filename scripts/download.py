@@ -8,30 +8,30 @@ Examples
 --------
 Estimate the cost of a request without downloading anything::
 
-    python scripts/download.py --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
+    pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
         --product downscaled --variable tas --member 003 \
         --start 2050-01-01 --end 2059-12-31 --bbox 68 6 98 38 --dry-run
 
 Download a single-point time series::
 
-    python scripts/download.py --scenario historical --gcm CESM2-WACCM6 --method bcsd \
+    pixi run download --scenario historical --gcm CESM2-WACCM6 --method bcsd \
         --product downscaled --variable tas --member r3i1p1f1 \
         --point 28.6 77.2 --start 1990-01-01 --end 1999-12-31 --output delhi.nc
 
 See which ensemble members a scenario contains, and what each one covers::
 
-    python scripts/download.py --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
+    pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
         --product downscaled --list-members
 
 Download the bias-corrected data on the GCM's own grid, before downscaling::
 
-    python scripts/download.py --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
+    pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
         --product debiased_coarse --variable dtr --member 008 \
         --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
 
 Download the GCM input data the pipeline started from, before bias correction::
 
-    python scripts/download.py --scenario ssp245 --gcm CESM2-WACCM6 --product input \
+    pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --product input \
         --variable tas --member 003 --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
 """
 

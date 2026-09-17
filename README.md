@@ -101,18 +101,20 @@ Then open a notebook from the `notebooks/` folder. Most of the notebooks use hel
 
 ## downloading data from the command line
 
-If you know the exact data you want and don't want to bother with an interactive session, `scripts/download.sh` is a
+If you know the exact data you want and don't want to bother with an interactive session, `pixi run download` is a
 command-line counterpart to the notebook. It takes the same choices — scenario, GCM,
 ensemble member, downscaling_method, region, variable, date range — as arguments, and downloads the corresponding subset 
 to your local computer. You can download data in either `netCDF` or `Zarr` formats. Below we outline some helpful options
-to pass to the script. Run `./scripts/download.sh --help` to see the full list of available options.
+to pass to the script. Run `pixi run download --help` to see the full list of available options.
+
+The command works the same way on Windows, macOS and Linux. There is also `./scripts/download.sh`, which does exactly the same thing and takes the same options, but it needs a bash shell, so Windows users need Git Bash or WSL for it.
 
 Every download needs you to say exactly which data you want: the model (`--gcm`, `CESM2-WACCM6` or `UKESM1-1-LL`), downscaling method (`--method`, `bcsd` or `qdmsd`), product (`--product`, `downscaled`, `debiased_coarse` or `input`), scenario, variable and ensemble member. If one of them is missing or isn't available, the script stops and lists the options you can choose from.
 
 Check what a request costs before downloading anything by using the flag `--dry-run`:
 
 ```bash
-./scripts/download.sh --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
+pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
     --product downscaled --variable tas --member 003 \
     --start 2050-01-01 --end 2059-12-31 --bbox 68 6 98 38 --dry-run
 ```
@@ -120,7 +122,7 @@ Check what a request costs before downloading anything by using the flag `--dry-
 Download a single-point time series:
 
 ```bash
-./scripts/download.sh --scenario historical --gcm CESM2-WACCM6 --method bcsd \
+pixi run download --scenario historical --gcm CESM2-WACCM6 --method bcsd \
     --product downscaled --variable tas --member r3i1p1f1 \
     --point 28.6 77.2 --start 1990-01-01 --end 1999-12-31 --output delhi.nc
 ```
@@ -128,7 +130,7 @@ Download a single-point time series:
 Download a region as `NetCDF`:
 
 ```bash
-./scripts/download.sh --scenario g6_1p5k --gcm CESM2-WACCM6 --method bcsd \
+pixi run download --scenario g6_1p5k --gcm CESM2-WACCM6 --method bcsd \
     --product downscaled --variable pr --member 003 \
     --bbox 68 6 98 38 --start 2050-01-01 --end 2059-12-31 \
     --output india_pr.nc
@@ -137,7 +139,7 @@ Download a region as `NetCDF`:
 Download a region as `Zarr`:
 
 ```bash
-./scripts/download.sh --scenario g6_1p5k --gcm CESM2-WACCM6 --method bcsd \
+pixi run download --scenario g6_1p5k --gcm CESM2-WACCM6 --method bcsd \
     --product downscaled --variable pr --member 003 \
     --bbox 68 6 98 38 --start 2050-01-01 --end 2059-12-31 \
     --format zarr --output india_pr.zarr
@@ -146,7 +148,7 @@ Download a region as `Zarr`:
 The ensemble members and variables available for each GCM differ. You can see what data are available with the `--list-members` flag:
 
 ```bash
-./scripts/download.sh --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
+pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
     --product downscaled --list-members
 ```
 
@@ -160,7 +162,7 @@ member       coverage                  variables
 Then pick one with `--member`:
 
 ```bash
-./scripts/download.sh --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
+pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
     --product downscaled --variable tas --member 008 \
     --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
 ```
@@ -171,7 +173,7 @@ data includes the diurnal temperature range (`dtr`) instead of `tasmin` since th
 downscaling step.
 
 ```bash
-./scripts/download.sh --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
+pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
     --product debiased_coarse --variable dtr --member 008 \
     --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
 ```
@@ -213,8 +215,8 @@ store holds, what a request costs, and what bias correction changed. The command
 tool downloads subsets with `--product input`:
 
 ```bash
-./scripts/download.sh --scenario ssp245 --gcm CESM2-WACCM6 --product input --list-members
-./scripts/download.sh --scenario ssp245 --gcm CESM2-WACCM6 --product input \
+pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --product input --list-members
+pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --product input \
     --variable tas --member 003 --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
 ```
 

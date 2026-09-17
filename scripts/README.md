@@ -4,8 +4,9 @@ This folder has the command-line download tool and the Python code that the tool
 
 | File | What it does | Used by |
 | --- | --- | --- |
-| [`download.sh`](download.sh) | Runs `download.py` inside the Pixi environment. This is the one you call from a terminal. | You |
-| [`download.py`](download.py) | The download tool. It checks your request, estimates how much data it will read and saves the result as NetCDF or Zarr. | `download.sh` |
+| [`download.py`](download.py) | The download tool. It checks your request, estimates how much data it will read and saves the result as NetCDF or Zarr. Call it with `pixi run download`, which works on Windows, macOS and Linux. | You |
+| [`download.sh`](download.sh) | Runs `download.py` inside the Pixi environment. The same thing as `pixi run download`, for people who prefer a shell script. Needs bash. | You |
+| [`check_docs_commands.py`](check_docs_commands.py) | Runs every download command shown in the README, the notebooks and the scripts with `--dry-run`, so examples can't drift out of step with the tool. | You and the CI workflow |
 | [`data_access.py`](data_access.py) | Opens the downscaled and bias-corrected data. It finds the right store, lists the members and variables a scenario contains, checks coverage and point lookups, estimates request sizes and names output files. | `download.py`, `input_access.py` and the [quickstart](../notebooks/quickstart.ipynb), [subsetting-and-exporting](../notebooks/subsetting-and-exporting.ipynb) and [compute-resources](../notebooks/compute-resources.ipynb) notebooks |
 | [`notebook_helpers.py`](notebook_helpers.py) | Longer pieces of example code that used to live in the notebooks, e.g. the quality flag summary, plus a check that your dates are inside the data. | The [subsetting-and-exporting](../notebooks/subsetting-and-exporting.ipynb) and [compute-resources](../notebooks/compute-resources.ipynb) notebooks |
 | [`input_access.py`](input_access.py) | Opens the GCM input data the downscaling started from. | `download.py --product input` |
