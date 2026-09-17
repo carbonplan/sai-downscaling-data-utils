@@ -199,6 +199,11 @@ def members_for(scenario: str, variable: str, gcm: str, method: str, *, product:
     tasmax/tasmin. Both products contain the same members.
     """
     variables = _variables(scenario, gcm, method, product)
+    if not isinstance(variable, str) or "," in variable:
+        raise ValueError(
+            f"choose one variable at a time, e.g. 'tas', not {variable!r}; "
+            f"{_where(gcm, method, product, scenario)} contains {sorted(variables)}"
+        )
     if variable not in variables:
         hint = ""
         if variable in COARSE_ONLY_VARIABLES and product != "debiased_coarse":
