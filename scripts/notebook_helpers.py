@@ -1,4 +1,4 @@
-"""Helpers for notebooks/subsetting-and-exporting.ipynb.
+"""Helpers for notebooks/subsetting-and-exporting.ipynb and compute-resources.ipynb.
 
 The notebook imports these so its cells can show the steps a reader adapts --
 selections, plots, exports -- without long setup and reporting code in between.
@@ -6,6 +6,8 @@ Data access itself lives in data_access.py, which the command-line tool shares.
 """
 
 from __future__ import annotations
+
+import sys
 
 import xarray as xr
 
@@ -19,6 +21,7 @@ __all__ = [
     "subset_time",
     "summarize_quality_flags",
     "check_tasmin_reconstruction",
+    "peak_memory_gb",
 ]
 
 
@@ -230,3 +233,14 @@ def check_tasmin_reconstruction(
     print(f"  largest |tasmin - (tasmax - dtr)|  {float(check['largest_residual']):.3g} K")
     print(f"  dtr range                          {float(check['dtr_min']):.2f} to {float(check['dtr_max']):.2f} K")
     return check
+
+
+def peak_memory_gb() -> float | None:
+    """The most memory this Python process has used so far, in GB, or None on Windows."""
+    try:
+        import resource
+    except ImportError:  # Windows has no resource module
+        return None
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    # macOS reports bytes, Linux kilobytes.
+    return peak / 1024**3 if sys.platform == "darwin" else peak / 1024**2

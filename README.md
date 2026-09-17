@@ -80,7 +80,7 @@ There are four notebooks in the `notebooks/` folder:
 
 - [`quickstart.ipynb`](notebooks/quickstart.ipynb): a short example that loads data for one region and season and saves the result to a file. Start here.
 - [`subsetting-and-exporting.ipynb`](notebooks/subsetting-and-exporting.ipynb): a longer walk-through of each step, with more options and example analysis code.
-- [`compute-resources.ipynb`](notebooks/compute-resources.ipynb): tips for running a global analysis without running out of memory.
+- [`compute-resources.ipynb`](notebooks/compute-resources.ipynb): tips for running a global analysis on a laptop, an HPC system or a cloud machine without running out of memory.
 - [`input-data.ipynb`](notebooks/input-data.ipynb): a look at the GCM input data the downscaling started from (see [input data](#input-data)).
 
 One way to run the notebooks is using JupyterLab. Starting JupyterLab via Pixi helps ensure all the required packages are available.
