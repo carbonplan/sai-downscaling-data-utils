@@ -16,14 +16,15 @@
 
 # sai-downscaling-data-utils
 
-This repository shares utilities for accessing and analyzing output from the [srm-downscaling project](https://carbonplan.github.io/srm-downscaling/). If you're new to the data, start with [`notebooks/quickstart.ipynb`](notebooks/quickstart.ipynb). It's a short example that loads data for one region and season and saves the result to a file. [`notebooks/subsetting-and-exporting.ipynb`](notebooks/subsetting-and-exporting.ipynb) goes through each of those steps in more detail.
+We built these utilities to access and analyze output from the [srm-downscaling project](https://carbonplan.github.io/srm-downscaling/). If you're new to the data, start with [`notebooks/quickstart.ipynb`](notebooks/quickstart.ipynb). It's a short example that loads data for one region and season and saves the result to a file. [`notebooks/subsetting-and-exporting.ipynb`](notebooks/subsetting-and-exporting.ipynb) goes through each of those steps in more detail.
 
-To get started, we recommend following the steps below:
+To get started, work through the 2 steps below. They take you from a fresh machine to a
+running notebook.
 
-**01 — [Set up your environment](#installation)**
+**01: [Set up your environment](#installation)**
 Install Git and Pixi, then clone the repository and install dependencies.
 
-**02 — [Run the notebooks](#running-the-notebooks)**
+**02: [Run the notebooks](#running-the-notebooks)**
 Launch JupyterLab and open the notebooks to start working with the data.
 
 ## data
@@ -35,7 +36,7 @@ If you come across a term you don't know (e.g. *store*, *group* or *chunk*), che
 
 ## installation
 
-All installation steps are run from a terminal. Once you have a terminal open, follow the steps below.
+You run every installation step from a terminal. Open one, then work through the steps below.
 
 ### use `Git` to download the access utilities
 
@@ -54,11 +55,13 @@ git clone https://github.com/carbonplan/sai-downscaling-data-utils
 cd sai-downscaling-data-utils
 ```
 
-Cloning the repository will copy the access utilities here on Github to your computer to allow you to run them.
+Cloning copies the access utilities from GitHub onto your computer so you can run them. You only
+need to do this once.
 
 ### use `Pixi` to ensure you have all the necessary packages
 
-This project uses [Pixi](https://pixi.sh) for environment and dependency management. Using Pixi will ensure that you can import all of the packages required by the access utilities.
+We use [Pixi](https://pixi.sh) for environment and dependency management. It makes sure every
+package the access utilities import is present and at the version we tested against.
 
 Verify Pixi is installed:
 
@@ -76,14 +79,16 @@ pixi install
 
 ## running the notebooks
 
-There are four notebooks in the `notebooks/` folder:
+We ship 4 notebooks in the `notebooks/` folder. Which one you want depends on how much detail
+you need:
 
 - [`quickstart.ipynb`](notebooks/quickstart.ipynb): a short example that loads data for one region and season and saves the result to a file. Start here.
 - [`subsetting-and-exporting.ipynb`](notebooks/subsetting-and-exporting.ipynb): a longer walk-through of each step, with more options and example analysis code.
 - [`compute-resources.ipynb`](notebooks/compute-resources.ipynb): tips for running a global analysis on a laptop, an HPC system or a cloud machine without running out of memory.
 - [`input-data.ipynb`](notebooks/input-data.ipynb): a look at the GCM input data the downscaling started from (see [input data](#input-data)).
 
-One way to run the notebooks is using JupyterLab. Starting JupyterLab via Pixi helps ensure all the required packages are available.
+We run the notebooks in JupyterLab. Starting it through Pixi makes sure every required package is
+available.
 
 ```bash
 pixi run jupyter lab
@@ -101,11 +106,12 @@ Then open a notebook from the `notebooks/` folder. Most of the notebooks use hel
 
 ## downloading data from the command line
 
-If you know the exact data you want and don't want to bother with an interactive session, `pixi run download` is a
-command-line counterpart to the notebook. It takes the same choices — scenario, GCM,
-ensemble member, downscaling_method, region, variable, date range — as arguments, and downloads the corresponding subset 
-to your local computer. You can download data in either `netCDF` or `Zarr` formats. Below we outline some helpful options
-to pass to the script. Run `pixi run download --help` to see the full list of available options.
+If you know the exact data you want and don't want to bother with an interactive session,
+`pixi run download` is a command-line counterpart to the notebook. It takes the same choices
+(scenario, GCM, ensemble member, downscaling method, region, variable, and date range) as
+arguments, and downloads the matching subset to your local computer. You can download in either
+`NetCDF` or `Zarr` format. Below we outline some helpful options to pass to the script, and
+`pixi run download --help` lists them all.
 
 The command works the same way on Windows, macOS and Linux. There is also `./scripts/download.sh`, which does exactly the same thing and takes the same options, but it needs a bash shell, so Windows users need Git Bash or WSL for it.
 
@@ -188,11 +194,12 @@ bbox-68E-6N-98E-38N_CESM2-WACCM6_bcsd_ssp245_003_pr_2050-2059.nc
 
 Coordinates are written with N/S and E/W instead of plus and minus signs, so a point at 40, -105 becomes `pt40N-105W`. Pass `--output` if you'd rather choose the name yourself.
 
-Pass `--qa-flags` to write the published quality flags alongside the variable.
+Pass `--qa-flags` to write the published quality flags alongside the variable. They come as extra
+arrays of 0s and 1s, where 1 marks a grid cell, or a day at a grid cell, with a known issue.
 
-The download script offers additional guidance for users:
+The script also guards against the 2 mistakes that cost the most time:
 
-- **Validates dates against the member you asked for.** Coverage differs —
+- **Validates dates against the member you asked for.** Coverage differs:
   `g6_1p5k` begins in 2035, `g6_1p5k_end` covers 2085–2100 and is published for
   `CESM2-WACCM6` only, and coverage varies *within* a scenario: on
   `CESM2-WACCM6`/`ssp245`, members `001`–`005` run to 2099 while `006`–`010`
@@ -200,7 +207,7 @@ The download script offers additional guidance for users:
   outside it fails loudly instead of writing an empty file.
 - **Warns before a large download.** Data is stored in spatiotemporal "chunks" which span about a year of time over a
   9°×18° tile, so a request touching a wide area reads far more than it returns.
-  Any requests over 1 GB prompts for confirmation; pass `--yes` to skip the prompt,
+  Any request over 1 GB prompts for confirmation; pass `--yes` to skip the prompt,
   or `--dry-run` to see the estimate and stop.
 
 ## input data
@@ -220,8 +227,9 @@ pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --product input \
     --variable tas --member 003 --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
 ```
 
-The input stores currently live on CarbonPlan's `carbonplan-srm` S3 bucket (anonymous,
-read-only) and will move to Source Cooperative. 
+We keep the input stores on Source Cooperative in the same bucket as the downscaled and
+bias-corrected output, under an `input/` prefix. You read them the same way as the rest:
+anonymous and read-only.
 
 The input data storage structure differs from the downscaled product's. A chunk holds the whole globe
 for 30 days (`CESM2-WACCM6`) or 60 days (`UKESM1-1-LL`), so accessing a region costs the same as a

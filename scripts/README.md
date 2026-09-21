@@ -1,6 +1,6 @@
 # scripts
 
-This folder has the command-line download tool and the Python code that the tool and the notebooks share. To download data, see [downloading data from the command line](../README.md#downloading-data-from-the-command-line) in the main README. If you come across a term you don't know, check the [glossary](../GLOSSARY.md).
+We keep the command-line download tool here, along with the Python code that the tool and the notebooks share. To download data, see [downloading data from the command line](../README.md#downloading-data-from-the-command-line) in the main README. If you come across a term you don't know, check the [glossary](../GLOSSARY.md).
 
 | File | What it does | Used by |
 | --- | --- | --- |
