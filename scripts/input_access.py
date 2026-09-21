@@ -6,8 +6,8 @@ variable on ``(ensemble_member, time, lat, lon)``. Names, units, calendars and
 longitudes are already standardized there. This module is the canonical home
 for where those stores live and how to read them.
 
-The stores sit on CarbonPlan's ``carbonplan-srm`` bucket until they move to
-source.coop, so their location is kept in one constants block below.
+The stores sit on source.coop next to the published output, under an ``input/`` prefix. We
+keep everything about where they live in the one constants block below.
 
 Two things differ from the published output in data_access.py:
 
@@ -45,17 +45,14 @@ __all__ = [
     "output_filename",
 ]
 
-# Where the stores live. Everything that changes when they move to source.coop
-# is in this block.
-INPUT_BUCKET = "carbonplan-srm"
+# Where the stores live. We keep everything about their location in this block.
+INPUT_BUCKET = "us-west-2.opendata.source.coop"
 INPUT_REGION = "us-west-2"
-_INPUT_PREFIX = "input/processed"
+_INPUT_PREFIX = "carbonplan/srm-downscaling/input/processed"
 INPUT_BRANCH = "main"
 
-# The S3 store names predate the model-name correction (#598) and cannot be
-# renamed; users only ever see the keys. A cesm2_waccm.icechunk (underscore)
-# also exists next to cesm2-waccm.icechunk and is empty -- never point at it.
-_STORES = {"CESM2-WACCM6": "cesm2-waccm", "UKESM1-1-LL": "ukesm"}
+# One store per GCM, named after the GCM. You only ever use the keys.
+_STORES = {"CESM2-WACCM6": "CESM2-WACCM6", "UKESM1-1-LL": "UKESM1-1-LL"}
 GCMS = list(_STORES)
 
 # The advertised set, so `--help` does not touch the network. What a scenario

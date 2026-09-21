@@ -32,7 +32,7 @@ A widely used single-file format for gridded climate data (`.nc`). The notebooks
 
 ### S3
 
-Amazon's cloud object storage. The published stores sit in a public S3 bucket hosted by [Source Cooperative](https://source.coop) and the input stores in CarbonPlan's `carbonplan-srm` bucket; both are readable without an account.
+Amazon's cloud object storage. The published stores and the input stores all sit in a public S3 bucket hosted by [Source Cooperative](https://source.coop), readable without an account.
 
 ### Shard
 
@@ -112,7 +112,7 @@ The first and last dates held for a given scenario, variable and member. Members
 
 ### Downscaling
 
-Turning coarse GCM output into a finer grid, 0.25° here, using observation-based data. It has two steps: bias correction, then spatial disaggregation.
+Turning coarse GCM output into a finer grid, 0.25° here, using observation-based data. It has 2 steps: bias correction, then spatial disaggregation.
 
 ### Ensemble member
 
