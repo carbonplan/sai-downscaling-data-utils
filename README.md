@@ -16,7 +16,7 @@
 
 # sai-downscaling-data-utils
 
-We built these utilities to access and analyze output from the [srm-downscaling project](https://carbonplan.github.io/srm-downscaling/). If you're new to the data, start with [`notebooks/quickstart.ipynb`](notebooks/quickstart.ipynb). It's a short example that loads data for one region and season and saves the result to a file. [`notebooks/subsetting-and-exporting.ipynb`](notebooks/subsetting-and-exporting.ipynb) goes through each of those steps in more detail.
+We built these utilities to access and analyze output from the [SAI Downscaling project](https://github.com/carbonplan/sai-downscaling). If you're new to the data, start with [`notebooks/quickstart.ipynb`](notebooks/quickstart.ipynb). It's a short example that loads data for one region and season and saves the result to a file. [`notebooks/subsetting-and-exporting.ipynb`](notebooks/subsetting-and-exporting.ipynb) goes through each of those steps in more detail.
 
 To get started, work through the 2 steps below. They take you from a fresh machine to a
 running notebook.
@@ -30,7 +30,7 @@ Launch JupyterLab and open the notebooks to start working with the data.
 ## data
 
 > [!IMPORTANT]
-> Data associated with this repository are subject to additional [terms of data access](https://carbonplan.github.io/srm-downscaling/terms-of-data-access.html).
+> Data accessed with these utilities are subject to the [Terms of Data Access](TERMS_OF_DATA_ACCESS). The download tool writes a copy of them alongside every export.
 
 If you come across a term you don't know (e.g. *store*, *group* or *chunk*), check the [glossary](GLOSSARY.md). We use the same terms as the Zarr and Icechunk documentation.
 
@@ -238,7 +238,7 @@ single point, and a long point series is expensive since it must read in the ent
 
 ## license
 
-All the code in this repository is [MIT](https://choosealicense.com/licenses/mit/) licensed.
+All the code in this repository is [MIT](https://choosealicense.com/licenses/mit/) licensed. The data it accesses is licensed separately: the downscaled output is CC-BY-4.0, while the input simulations carry several licenses, one per GCM and scenario. The [sai-downscaling](https://github.com/carbonplan/sai-downscaling) repository holds the full table and the attribution text to cite.
 
 ## about us
 

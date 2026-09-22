@@ -266,6 +266,34 @@ def list_members(args) -> int:
     return 0
 
 
+TERMS_FILENAME = "TERMS_OF_DATA_ACCESS"
+TERMS_SOURCE = Path(__file__).resolve().parents[1] / TERMS_FILENAME
+
+
+def write_terms_beside(out: Path) -> Path | None:
+    """Drop a copy of the Terms of Data Access next to a download.
+
+    Zarr output is a directory, so the copy goes in at its top level; netCDF is a single file, so
+    the copy sits beside it. Returns the path written, or None when this script runs without the
+    repository alongside it and the canonical file is therefore missing.
+
+    Parameters
+    ----------
+    out : Path
+        The path just written by a download.
+
+    Returns
+    -------
+    Path or None
+        Where the terms were written, or None if the canonical file could not be found.
+    """
+    if not TERMS_SOURCE.is_file():
+        return None
+    target = (out if out.is_dir() else out.parent) / TERMS_FILENAME
+    target.write_text(TERMS_SOURCE.read_text(encoding="utf-8"), encoding="utf-8")
+    return target
+
+
 def main(argv=None) -> int:
     args = parse_args(argv)
 
@@ -364,6 +392,10 @@ def main(argv=None) -> int:
 
     size = sum(f.stat().st_size for f in out.rglob("*")) if out.is_dir() else out.stat().st_size
     print(f"wrote {out} ({_human(size)})")
+
+    terms = write_terms_beside(out)
+    if terms is not None:
+        print(f"wrote {terms}")
     return 0
 
 

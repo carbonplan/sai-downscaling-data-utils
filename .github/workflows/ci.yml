@@ -31,3 +31,17 @@ jobs:
 
       - name: every documented download command still runs
         run: pixi run python scripts/check_docs_commands.py
+
+  terms:
+    name: terms of data access in sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # The canonical copy lives in the pipeline repo. Both repos are public, so no token is
+      # needed. Edit the canonical file there and copy it here, never the other way round.
+      - name: the local copy matches the canonical one
+        run: |
+          curl -fsSL -o /tmp/TERMS_OF_DATA_ACCESS \
+            https://raw.githubusercontent.com/carbonplan/sai-downscaling/main/TERMS_OF_DATA_ACCESS
+          diff -u /tmp/TERMS_OF_DATA_ACCESS TERMS_OF_DATA_ACCESS
