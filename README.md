@@ -238,7 +238,7 @@ single point, and a long point series is expensive since it must read in the ent
 
 ## license
 
-All the code in this repository is [MIT](https://choosealicense.com/licenses/mit/) licensed. The data it accesses is licensed separately: the downscaled output is CC-BY-4.0, while the input simulations carry several licenses, one per GCM and scenario. The [sai-downscaling](https://github.com/carbonplan/sai-downscaling) repository holds the full table and the attribution text to cite.
+All the code in this repository is [MIT](https://choosealicense.com/licenses/mit/) licensed. See the [licenses](https://sai-downscaling.readthedocs.org/access-data/licenses.html) section of our documentation for details about the licenses for all of the input and output datasets.
 
 ## about us
 
