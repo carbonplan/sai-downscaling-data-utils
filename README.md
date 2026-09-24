@@ -203,7 +203,7 @@ single point, and a long point series is slow since it must read in the entire d
 
 ## license
 
-All the code in this repository is [MIT](https://choosealicense.com/licenses/mit/) licensed. See the [licenses](https://sai-downscaling.readthedocs.io/en/latest/access-data/licenses.html) section of our documentation for details about the licenses for all of the input and output datasets.
+sai-downscaling-data-utils code is licensed under the MIT License - see the [LICENSE](https://github.com/carbonplan/sai-downscaling-data-utils/blob/main/LICENSE) file for details. See [Licenses and Citation](https://sai-downscaling.readthedocs.io/en/latest/access-data/licenses.html) in the SAI Downscaling documentation for details about the licensing of that project's input and output datasets.
 
 ## about us
 
