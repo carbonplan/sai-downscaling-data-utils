@@ -351,7 +351,7 @@ def load_downscaling_store(
 
 
 def describe_request(da: xr.DataArray, label: str = "selection", quiet: bool = False) -> int:
-    """Estimate what a selection costs before you load it.
+    """Estimate how much data a selection reads before you load it.
 
     Returns the number of bytes that will actually be read, which is what
     matters: a chunk is the unit of decompression, so a request touching one

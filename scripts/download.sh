@@ -8,7 +8,7 @@
 #
 # Examples
 # --------
-#   # Estimate what a request costs, without downloading anything:
+#   # Estimate how much data a request reads, without downloading anything:
 #   ./scripts/download.sh --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
 #       --product downscaled --variable tas --member 003 \
 #       --start 2050-01-01 --end 2059-12-31 --bbox 68 6 98 38 --dry-run

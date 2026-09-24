@@ -1,5 +1,9 @@
 # Glossary
 
+> [!NOTE]
+> This glossary was drafted with AI assistance (Claude Code)
+
+
 The terms below appear in the [notebooks](notebooks/), the command-line tool and the [README](README.md). Storage terms follow the [Zarr specification](https://zarr-specs.readthedocs.io/en/latest/v3/core/index.html), which the [Icechunk documentation](https://icechunk.io/en/stable/) builds on, so they carry the same meaning in both.
 
 **Sections:** [Storage and data format](#storage-and-data-format) · [Requests and computation](#requests-and-computation) · [Climate data](#climate-data) · [Input data](#input-data)
@@ -94,7 +98,7 @@ Masking sets values outside a shape, such as a country border, to NaN. Clipping 
 
 ### Request
 
-A selection asked of a store: a variable, a place and a date range. Its cost is set by the chunks it touches, not by the number of values it returns; `describe_request(...)` and `./scripts/download.sh --dry-run` estimate it before any data is read.
+A selection asked of a store: a variable, a place and a date range. Reading is free, so what matters is its size: how much data it reads, which is set by the chunks it touches, not by the number of values it returns. `describe_request(...)` and `pixi run download --dry-run` estimate it before any data is read.
 
 ### Resample
 

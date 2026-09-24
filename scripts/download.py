@@ -6,7 +6,7 @@ when you want a file rather than an interactive session.
 
 Examples
 --------
-Estimate the cost of a request without downloading anything::
+Estimate how much data a request reads, without downloading anything::
 
     pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
         --product downscaled --variable tas --member 003 \
@@ -127,7 +127,7 @@ def parse_args(argv=None) -> argparse.Namespace:
         help="also write the quality flag variables. The per-day flag shares the data's "
              "chunk grid, so this roughly doubles the bytes read",
     )
-    p.add_argument("--dry-run", action="store_true", help="report cost, download nothing")
+    p.add_argument("--dry-run", action="store_true", help="report how much data would be read, download nothing")
     p.add_argument("--yes", "-y", action="store_true", help="skip the confirmation prompt")
     args = p.parse_args(argv)
     _check_product_args(args)

@@ -117,7 +117,9 @@ The command works the same way on Windows, macOS and Linux. There is also `./scr
 
 Every download needs you to say exactly which data you want: the model (`--gcm`, `CESM2-WACCM6` or `UKESM1-1-LL`), downscaling method (`--method`, `bcsd` or `qdmsd`), product (`--product`, `downscaled`, `debiased_coarse` or `input`), scenario, variable and ensemble member. If one of them is missing or isn't available, the script stops and lists the options you can choose from.
 
-Check what a request costs before downloading anything by using the flag `--dry-run`:
+Reading the data is free, since the bucket is public and needs no account. What varies is how
+much data a request reads, which sets how long the download takes and how much disk it needs.
+Check the size of a request before downloading anything by using the flag `--dry-run`:
 
 ```bash
 pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
@@ -218,7 +220,7 @@ Gregorian calendar and longitudes from -180 to 180. These data
 also include `hurs` (near-surface relative humidity), which the downscaled product does not.
 
 [`notebooks/input-data.ipynb`](notebooks/input-data.ipynb) walks through them: what each
-store holds, what a request costs, and what bias correction changed. The command-line
+store holds, how much data a request reads, and what bias correction changed. The command-line
 tool downloads subsets with `--product input`:
 
 ```bash
@@ -232,9 +234,9 @@ bias-corrected output, under an `input/` prefix. You read them the same way as t
 anonymous and read-only.
 
 The input data storage structure differs from the downscaled product's. A chunk holds the whole globe
-for 30 days (`CESM2-WACCM6`) or 60 days (`UKESM1-1-LL`), so accessing a region costs the same as a
-single point, and a long point series is expensive since it must read in the entire dataset (e.g. 6.9 GB for 85 years of one
-`CESM2-WACCM6` member). Maps are cheap.
+for 30 days (`CESM2-WACCM6`) or 60 days (`UKESM1-1-LL`), so accessing a region reads as much as a
+single point, and a long point series is slow since it must read in the entire dataset (e.g. 6.9 GB for 85 years of one
+`CESM2-WACCM6` member). Maps are quick.
 
 ## license
 

@@ -108,7 +108,7 @@ def request_size_examples(da: xr.DataArray) -> None:
     """Print what four typical requests read. Nothing is computed.
 
     A point's full record, a regional decade, a global decade and a single
-    global day -- the rows of the cost table in Section 2 of the notebook.
+    global day -- the rows of the request-size table in Section 2 of the notebook.
     """
     decade = first_decade(da)  # scenario-safe; never an empty selection
 
