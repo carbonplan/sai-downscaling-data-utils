@@ -106,111 +106,63 @@ Then open a notebook from the `notebooks/` folder. Most of the notebooks use hel
 
 ## downloading data from the command line
 
-If you know the exact data you want and don't want to bother with an interactive session,
-`pixi run download` is a command-line counterpart to the notebook. It takes the same choices
-(scenario, GCM, ensemble member, downscaling method, region, variable, and date range) as
-arguments, and downloads the matching subset to your local computer. You can download in either
-`NetCDF` or `Zarr` format. Below we outline some helpful options to pass to the script, and
-`pixi run download --help` lists them all.
+Use `pixi run download` when you want a file without opening a notebook. Run it from the
+cloned repository after [installation](#installation). It reads the public data without an
+account and saves a subset as NetCDF by default. The command works on Windows, macOS and Linux.
 
-The command works the same way on Windows, macOS and Linux. There is also `./scripts/download.sh`, which does exactly the same thing and takes the same options, but it needs a bash shell, so Windows users need Git Bash or WSL for it.
+You choose a model (`--gcm`), scenario, product, variable and ensemble member. For the
+downscaled and bias-corrected products, you also choose a downscaling method (`--method`).
+If a choice is missing or unavailable, the command tells you what to choose instead.
 
-Every download needs you to say exactly which data you want: the model (`--gcm`, `CESM2-WACCM6` or `UKESM1-1-LL`), downscaling method (`--method`, `bcsd` or `qdmsd`), product (`--product`, `downscaled`, `debiased_coarse` or `input`), scenario, variable and ensemble member. If one of them is missing or isn't available, the script stops and lists the options you can choose from.
+### make your first download
 
-Reading the data is free, since the bucket is public and needs no account. What varies is how
-much data a request reads, which sets how long the download takes and how much disk it needs.
-Check the size of a request before downloading anything by using the flag `--dry-run`:
+First, list the members for the data you want. The list shows each member's dates and variables:
 
-```bash
-pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
-    --product downscaled --variable tas --member 003 \
-    --start 2050-01-01 --end 2059-12-31 --bbox 68 6 98 38 --dry-run
+```text
+pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd --product downscaled --list-members
 ```
 
-Download a single-point time series:
+For example, member `008` contains `tas` (air temperature) for 2050–2059. Check how much
+data a Delhi point request would read before downloading it:
 
-```bash
-pixi run download --scenario historical --gcm CESM2-WACCM6 --method bcsd \
-    --product downscaled --variable tas --member r3i1p1f1 \
-    --point 28.6 77.2 --start 1990-01-01 --end 1999-12-31 --output delhi.nc
+```text
+pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd --product downscaled --variable tas --member 008 --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31 --dry-run
 ```
 
-Download a region as `NetCDF`:
+`--point` takes latitude, then longitude. The dry run reports the estimated data read and
+downloads nothing. To save that selection, replace `--dry-run` with `--output delhi_tas.nc`:
 
-```bash
-pixi run download --scenario g6_1p5k --gcm CESM2-WACCM6 --method bcsd \
-    --product downscaled --variable pr --member 003 \
-    --bbox 68 6 98 38 --start 2050-01-01 --end 2059-12-31 \
-    --output india_pr.nc
+```text
+pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd --product downscaled --variable tas --member 008 --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31 --output delhi_tas.nc
 ```
 
-Download a region as `Zarr`:
+The commands are on single lines so they also work in PowerShell and Command Prompt.
+Run `pixi run download --help` for the full list of options.
 
-```bash
-pixi run download --scenario g6_1p5k --gcm CESM2-WACCM6 --method bcsd \
-    --product downscaled --variable pr --member 003 \
-    --bbox 68 6 98 38 --start 2050-01-01 --end 2059-12-31 \
-    --format zarr --output india_pr.zarr
-```
+### other options
 
-The ensemble members and variables available for each GCM differ. You can see what data are available with the `--list-members` flag:
+- Use `--bbox LON_MIN LAT_MIN LON_MAX LAT_MAX` to download a region instead of a point.
+  For example, `--bbox 68 6 98 38` selects a region around India. A regional request
+  may read much more data than a point request.
+- Use `--format zarr --output delhi_tas.zarr` to save Zarr instead of NetCDF. Choose an
+  output name ending in `.zarr` for Zarr or `.nc` for NetCDF.
+- Use `--product debiased_coarse` for bias-corrected data on the GCM's grid, before
+  downscaling. This product has `dtr` (diurnal temperature range) in place of `tasmin`.
+  For the pre-processed GCM data, see [input data](#input-data); `--product input` does
+  not take `--method`.
+- Use `--qa-flags` with the downscaled or bias-corrected product to include the
+  published quality flags. A value of 1 marks a grid cell, or a day at a grid
+  cell, with a known issue.
 
-```bash
-pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
-    --product downscaled --list-members
-```
+The tool checks your dates against the chosen member's actual coverage. Coverage can vary
+even within a scenario, so use `--list-members` before choosing dates. A request that reads
+more than 1 GB prompts you before downloading; `--yes` skips that prompt. A wide request
+can read substantially more data than the resulting file contains because the stored data
+are read in chunks.
 
-```
-member       coverage                  variables
-001          2015-01-01 to 2099-12-31  pr rsds tas
-...
-006          2015-01-01 to 2068-12-31  pr rsds tas tasmax tasmin
-```
-
-Then pick one with `--member`:
-
-```bash
-pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
-    --product downscaled --variable tas --member 008 \
-    --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
-```
-
-Download the bias-corrected data instead of the downscaled data with `--product debiased_coarse`. This coarse data is
-at the GCM's resolution (about 1° for `CESM2-WACCM6`) as opposed to the 0.25° resolution of the downscaled data. The bias-corrected
-data includes the diurnal temperature range (`dtr`) instead of `tasmin` since the daily minimum temperature is calculated as part of the
-downscaling step.
-
-```bash
-pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --method bcsd \
-    --product debiased_coarse --variable dtr --member 008 \
-    --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
-```
-
-Output files are named after the data they contain, so repeated downloads never
-overwrite one another:
-
-```
-pt28.6N-77.2E_CESM2-WACCM6_bcsd_ssp245_003_tas_2050-2055.nc
-bbox-68E-6N-98E-38N_CESM2-WACCM6_bcsd_ssp245_003_pr_2050-2059.nc
-```
-
-Coordinates are written with N/S and E/W instead of plus and minus signs, so a point at 40, -105 becomes `pt40N-105W`. Pass `--output` if you'd rather choose the name yourself.
-
-Pass `--qa-flags` to write the published quality flags alongside the variable. They come as extra
-arrays of 0s and 1s, where 1 marks a grid cell, or a day at a grid cell, with a known issue.
-
-The script also guards against the 2 mistakes that cost the most time:
-
-- **Validates dates against the member you asked for.** Coverage differs:
-  `g6_1p5k` begins in 2035, `g6_1p5k_end` covers 2085–2100 and is published for
-  `CESM2-WACCM6` only, and coverage varies *within* a scenario: on
-  `CESM2-WACCM6`/`ssp245`, members `001`–`005` run to 2099 while `006`–`010`
-  stop in 2069. The range is read from the member's own time axis, so asking
-  outside it fails loudly instead of writing an empty file.
-- **Warns before a large download.** Data is stored in spatiotemporal "chunks" which span about a year of time over a
-  9°×18° tile, so a request touching a wide area reads far more than it returns.
-  Any request over 1 GB prompts for confirmation; pass `--yes` to skip the prompt,
-  or `--dry-run` to see the estimate and stop.
+Without `--output`, the tool builds a name from your selection, including the location,
+model, scenario, member, variable and years. Repeating the same request can replace the
+existing file, so choose a different output path if you want to keep both copies.
 
 ## input data
 
@@ -220,13 +172,24 @@ Gregorian calendar and longitudes from -180 to 180. These data
 also include `hurs` (near-surface relative humidity), which the downscaled product does not.
 
 [`notebooks/input-data.ipynb`](notebooks/input-data.ipynb) walks through them: what each
-store holds, how much data a request reads, and what bias correction changed. The command-line
-tool downloads subsets with `--product input`:
+store holds, how much data a request reads, and what bias correction changed. To download a
+subset from the command line, choose `--product input`. There is no `--method` because these
+data have not been downscaled. First, list the available members:
 
-```bash
+```text
 pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --product input --list-members
-pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --product input \
-    --variable tas --member 003 --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31
+```
+
+Then check how much a point time series would read:
+
+```text
+pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --product input --variable tas --member 003 --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31 --dry-run
+```
+
+If you're ready to download it, run:
+
+```text
+pixi run download --scenario ssp245 --gcm CESM2-WACCM6 --product input --variable tas --member 003 --point 28.6 77.2 --start 2050-01-01 --end 2059-12-31 --output delhi_input_tas.nc
 ```
 
 We keep the input stores on Source Cooperative in the same bucket as the downscaled and
